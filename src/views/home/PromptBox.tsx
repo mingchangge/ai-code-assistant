@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { askSpark } from './spark'
+import { askSpark } from '@/utils/spark'
 
 interface PromptBoxProps {
   onFiles: (files: Record<string, string>) => void
@@ -12,21 +12,14 @@ export default function PromptBox({ onFiles }: PromptBoxProps) {
   const handle = async () => {
     setLoading(true)
     try {
-      const system =
-        '你是资深前端工程师，只回答三段代码，格式：先```html（完整HTML）```再```css（完整CSS）```最后```js（完整JS）```，不要其它文字。'
-
-      // 3. 组合成一条完整 prompt
-      const fullPrompt = `${system}\n需求：${prompt}`
-      const res = await askSpark(fullPrompt)
+      const res = await askSpark(
+        '你是资深前端工程师，只回答三段代码，格式：先```html（完整HTML）```再```css（完整CSS）```最后```js（完整JS）```，不要其它文字。' +
+          `\n需求：${prompt}`
+      )
       console.log('AI 返回原始数据:', res)
-      try {
-        const { html, css, js } = extractBlocks(res)
-        console.log('AI 返回:', { html, css, js })
-        onFiles({ 'index.html': html, 'style.css': css, 'index.js': js })
-      } catch {
-        console.error('AI 返回格式异常:', res)
-        alert('AI 返回格式异常')
-      }
+      const { html, css, js } = extractBlocks(res)
+      console.log('AI 返回:', { html, css, js })
+      onFiles({ 'index.html': html, 'style.css': css, 'index.js': js })
     } catch (error) {
       console.error('Error during AI request:', error)
       alert('AI 请求失败，请稍后再试。')
@@ -42,10 +35,21 @@ export default function PromptBox({ onFiles }: PromptBoxProps) {
         type="text"
         placeholder="写一个带动画的登录表单"
         value={prompt}
-        onChange={e => setPrompt(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && handle()}
+        onChange={e => {
+          setPrompt(e.target.value)
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            void handle()
+          }
+        }}
       />
-      <button onClick={handle} disabled={loading}>
+      <button
+        onClick={() => {
+          void handle()
+        }}
+        disabled={loading}
+      >
         {loading ? '生成中…' : '星火生成'}
       </button>
     </header>
