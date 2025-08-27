@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { askSpark } from '@/utils/spark'
+import { askSpark, assemble } from '@/utils/spark'
 
 interface PromptBoxProps {
   onFiles: (files: Record<string, string>) => void
@@ -10,20 +10,29 @@ export default function PromptBox({ onFiles }: PromptBoxProps) {
   const [loading, setLoading] = useState(false)
 
   const handle = async () => {
+    if (!prompt.trim()) return
     setLoading(true)
     try {
-      const res = await askSpark(
-        '你是资深前端工程师，只回答三段代码，格式：先```html（完整HTML）```再```css（完整CSS）```最后```js（完整JS）```，不要其它文字。' +
-          `\n需求：${prompt}`
+      const raw = await askSpark(
+        `请严格按照以下格式要求返回代码:
+          1. 单段格式（≤1000字符）: {"type":"single","lang":"js","code":{"html":"...","css":"...","js":"..."},"code_length":number,"js_sha256":"..."}
+          2. 多段格式（>1000字符）: {"type":"multi","lang":"js","code_part":number,"code_total_parts":number,"chunk":"...","js_sha256":"..."}
+          3. code 字段为 JSON 字符串，内含 html、css、js 三个键；当总长度>1000 时，按 html→css→js 顺序依次拆分，每段≤1000 字符，未用到的键留空字符串。
+          4. 确保JSON语法正确，转义字符使用恰当
+          5. 只返回JSON内容，不包含其他解释文本
+          用户需求: ${prompt}
+          注意：请务必严格按照上述格式返回，确保JSON语法正确且无多余内容
+        `.trim()
       )
-      console.log('AI 返回原始数据:', res)
-      const { html, css, js } = extractBlocks(res)
-      console.log('AI 返回:', { html, css, js })
-      onFiles({ 'index.html': html, 'style.css': css, 'index.js': js })
-    } catch (error) {
-      console.error('Error during AI request:', error)
-      alert('AI 请求失败，请稍后再试。')
-      return
+      const map = await assemble(raw)
+      onFiles({
+        'index.html': map.html,
+        'style.css': map.css,
+        'index.js': map.js
+      })
+    } catch (err) {
+      console.error(err)
+      alert(err instanceof Error ? err.message : '生成失败')
     } finally {
       setLoading(false)
     }
@@ -39,41 +48,12 @@ export default function PromptBox({ onFiles }: PromptBoxProps) {
           setPrompt(e.target.value)
         }}
         onKeyDown={e => {
-          if (e.key === 'Enter') {
-            void handle()
-          }
+          if (e.key === 'Enter') void handle()
         }}
       />
-      <button
-        onClick={() => {
-          void handle()
-        }}
-        disabled={loading}
-      >
+      <button onClick={() => void handle()} disabled={loading}>
         {loading ? '生成中…' : '星火生成'}
       </button>
     </header>
   )
-}
-// 解析 AI 返回的 JSON 字符串
-function extractBlocks(raw: string): {
-  html: string
-  css: string
-  js: string
-} {
-  const map: Record<'html' | 'css' | 'js', string> = {
-    html: '',
-    css: '',
-    js: ''
-  }
-
-  const regex = /```(html|css|js)\s*\n([\s\S]*?)```/g
-  let match: RegExpExecArray | null
-
-  while ((match = regex.exec(raw)) !== null) {
-    const key = match[1] as keyof typeof map
-    map[key] = match[2].trim()
-  }
-
-  return map
 }
