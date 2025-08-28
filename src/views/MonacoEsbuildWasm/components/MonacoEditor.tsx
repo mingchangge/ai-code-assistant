@@ -82,7 +82,9 @@ export default function MonacoEditor({
       }
     })()
 
-    return () => ac.abort()
+    return () => {
+      ac.abort()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFile]) // 只依赖 activeFile，不依赖 files（用 ref 拿最新值）
 
@@ -95,7 +97,9 @@ export default function MonacoEditor({
         {Object.keys(files).map(f => (
           <button
             key={f}
-            onClick={() => setActiveFile(f)}
+            onClick={() => {
+              setActiveFile(f)
+            }}
             style={{
               padding: '4px 8px',
               background: activeFile === f ? '#0e639c' : 'transparent',
@@ -110,7 +114,10 @@ export default function MonacoEditor({
       </div>
 
       {/* 编辑器容器 */}
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div
+        ref={containerRef}
+        style={{ width: '100%', height: 'calc(100% - 40px)' }}
+      />
     </div>
   )
 }
