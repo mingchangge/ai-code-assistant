@@ -19,9 +19,11 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   // 根据主题模式切换算法
   const themeConfig: ThemeContextType['themeConfig'] = {
     algorithm: themeMode === 'light' ? defaultAlgorithm : darkAlgorithm,
+    cssVar: true,
     // 可以在这里添加自定义token，会与算法生成的token合并
     token: {
-      colorPrimary: '#1890ff' // 保持主色调一致
+      colorPrimary: '#1890ff', // 保持主色调一致
+      colorBgBase: themeMode === 'dark' ? '#1f1f1f' : '#ffffff' // 显式定义 colorBgBase（确保变量生成）
     }
   }
 

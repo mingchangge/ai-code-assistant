@@ -7,20 +7,22 @@ import {
 import { Flex } from 'antd'
 import EditorPanel from './EditorPanel'
 import styled from 'styled-components'
+import getThemeStyles from '@/utils/getThemeStyles'
 
 type FileRecord = Record<string, string>
 
+const themeStyles = getThemeStyles()
 const StyledFlex = styled.div`
   .code-box {
     height: calc(100vh - 238px);
-    border: 1px solid #ccc;
+    border: 1px solid ${themeStyles.borderColor};
     .flex-1 {
       flex: 1;
       min-width: 0;
       width: 50%;
       height: 100%;
       /* 默认占据一半宽度 */
-      border-inline-end: 1px solid #ccc;
+      border-inline-end: 1px solid ${themeStyles.borderColor};
       &:last-child {
         border-inline-end: none;
       }
@@ -34,7 +36,7 @@ const StyledFlex = styled.div`
           color: #374151;
           /* 深灰文字 */
           padding: 0.5rem 0.75rem;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid ${themeStyles.borderColor};
         }
 
         .editor-tabs button {
@@ -54,7 +56,7 @@ const StyledFlex = styled.div`
         }
         .editor-box {
           padding: 0;
-          height: calc(100% - 48px);
+          height: calc(100% - 49px);
           background-color: #f9fafb;
           /* 浅灰背景 */
           border-radius: 0;
@@ -68,7 +70,7 @@ const StyledFlex = styled.div`
       width: 100%;
       height: 50%;
       &:last-child {
-        border-block-start: 1px solid #ccc;
+        border-block-start: 1px solid ${themeStyles.borderColor};
       }
       .sp-stack {
         height: 100%;

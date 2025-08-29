@@ -1,12 +1,10 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
-
+// 样式相关
 import styled from 'styled-components'
-import SideMenu from './components/SideMenu'
-
 import useTheme from '@/hooks/useTheme'
 import getThemeStyles from '../utils/getThemeStyles'
-
+// antd组件
 import { Layout, Button, FloatButton } from 'antd'
 import {
   MenuUnfoldOutlined,
@@ -14,7 +12,11 @@ import {
   MoonOutlined,
   SunOutlined
 } from '@ant-design/icons'
+// 自定义组件
+import SideMenu from './components/SideMenu'
 
+// 从 getThemeStyles 中获取主题样式,方便有改动后进行替换
+const setThemeStyle = getThemeStyles()
 // 从 Layout 中解构出 Header, Sider, Content 组件
 const { Header, Sider, Content } = Layout
 // 自定义 Layout 样式
@@ -22,14 +24,15 @@ const StyledLayout = styled(Layout)`
   height: 100%;
   text-align: left;
 `
-const StyledHeader = styled(Header)<{ theme: 'light' | 'dark' }>`
+// 自定义 Header 样式
+const StyledHeader = styled(Header)`
   display: 'flex';
   align-items: 'center';
   width: 100%;
   height: 64px;
-  background: ${props => getThemeStyles(props.theme).cardBgColor};
-  border-bottom: 1px solid ${props => getThemeStyles(props.theme).borderColor};
-  box-shadow: ${props => getThemeStyles(props.theme).shadow};
+  background: ${setThemeStyle.backgroundColor};
+  border-bottom: 1px solid ${setThemeStyle.borderColor};
+  box-shadow: ${setThemeStyle.shadow};
   h1 {
     font-size: 24px;
   }
@@ -39,27 +42,28 @@ const StyledHeader = styled(Header)<{ theme: 'light' | 'dark' }>`
     right: 16px;
   }
 `
-const StyledSider = styled(Sider)<{
-  collapsed: boolean
-  theme: 'light' | 'dark'
-}>`
+// 自定义 Sider 样式
+const StyledSider = styled(Sider)<{ collapsed: boolean }>`
   width: ${props => (props.collapsed ? '80px' : '200px')};
-  border-right: 1px solid ${props => getThemeStyles(props.theme).borderColor};
-  background: ${props => getThemeStyles(props.theme).cardBgColor};
+  border-right: 1px solid ${setThemeStyle.borderColor};
+  background: ${setThemeStyle.backgroundColor};
   transition: width 0.3s ease;
   .ant-menu {
     border-inline-end: none !important;
     background-color: transparent;
     text-align: ${props => (props.collapsed ? 'center' : 'left')};
 `
-const StyledContent = styled(Content)<{ theme: 'light' | 'dark' }>`
+// 自定义 Content 样式
+const StyledContent = styled(Content)`
   margin: 24px 16px;
   padding: 24px;
   min-height: 280px;
-  background: ${props => getThemeStyles(props.theme).cardBgColor};
-  border: 1px solid ${props => getThemeStyles(props.theme).borderColor};
-  box-shadow: ${props => getThemeStyles(props.theme).shadow};
+  background: ${setThemeStyle.backgroundColor};
+  border: 1px solid ${setThemeStyle.borderColor};
+  box-shadow: ${setThemeStyle.shadow};
 `
+
+// 主布局组件
 const MainLayout = () => {
   // 侧边栏折叠状态
   const [collapsed, setCollapsed] = useState(false)

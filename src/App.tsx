@@ -1,3 +1,4 @@
+import 'antd/dist/reset.css'
 import { RouterProvider } from 'react-router-dom'
 import { ConfigProvider } from 'antd'
 // antd v5 默认兼容 React 16 ~ 18 版本，对于 React 19 版本，可以使用以下兼容方法进行适配，该兼容方式以及接口将在 v6 被移除。
