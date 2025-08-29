@@ -1,10 +1,32 @@
 import { useState, useCallback } from 'react'
+import { Flex } from 'antd'
 import PromptBox from './components/PromptBox'
 import MonacoEditor from './components/MonacoEditor'
 import CodePreview from './components/CodePreview'
-import '@/styles/home.css'
+import styled from 'styled-components'
 
 type FileRecord = Record<string, string>
+// 样式
+const StyledCodeBox = styled.div`
+  .code-box {
+    height: calc(100vh - 238px);
+  }
+  .prompt-box {
+    margin: 1rem 0 1.4rem;
+  }
+  .flex-1 {
+    flex: 1;
+    min-width: 0;
+    width: 50%;
+    height: 100%;
+    /* 默认占据一半宽度 */
+
+    .editor-panel {
+      width: 100%;
+      height: 100%;
+    }
+  }
+`
 export default function Home() {
   const [files, setFiles] = useState<FileRecord>({
     'index.html': `<!DOCTYPE html>
@@ -27,9 +49,9 @@ export default function Home() {
   }, [])
 
   return (
-    <div>
+    <StyledCodeBox>
       <PromptBox onFiles={handleFiles} />
-      <div className="flex-box">
+      <Flex gap="small" wrap="nowrap" className="code-box">
         <div className="flex-1">
           {/* 左侧编辑面板 */}
           <MonacoEditor files={files} onFilesChange={handleFiles} />
@@ -38,7 +60,7 @@ export default function Home() {
           {/* 右侧预览 */}
           <CodePreview files={files} />
         </div>
-      </div>
-    </div>
+      </Flex>
+    </StyledCodeBox>
   )
 }

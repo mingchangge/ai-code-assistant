@@ -56,7 +56,6 @@ const SideMenu = () => {
 
   return (
     <Menu
-      style={{ border: 'none', textAlign: 'left' }}
       selectedKeys={[findSelectedKey()]}
       onClick={handleMenuClick}
       items={menuItems.map(item => ({

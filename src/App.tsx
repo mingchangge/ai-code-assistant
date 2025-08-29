@@ -1,29 +1,17 @@
 import { RouterProvider } from 'react-router-dom'
 import { ConfigProvider } from 'antd'
+// antd v5 默认兼容 React 16 ~ 18 版本，对于 React 19 版本，可以使用以下兼容方法进行适配，该兼容方式以及接口将在 v6 被移除。
+import '@ant-design/v5-patch-for-react-19'
 import useTheme from './hooks/useTheme' // 自定义主题 Hook
-import { ThemeProvider } from './contexts/ThemeContext' // 自定义主题提供者
-
+import { ThemeProvider } from './contexts/ThemeProvider' // 自定义主题提供者
 import router from './router'
-import getThemeStyles from './utils/getThemeStyles'
 import './App.css'
 
 // 1. 创建内部组件，在 ThemeProvider 内部使用 useTheme
 const AppContent = () => {
-  // 此时调用 useTheme 时，已在 ThemeProvider 内部
-  const { theme } = useTheme()
-
-  const defaultThemeConfig = {
-    token: {
-      colorPrimary: '#1890ff',
-      colorBgContainer: getThemeStyles(theme).cardBgColor,
-      colorText: getThemeStyles(theme).textColor,
-      colorBorder: getThemeStyles(theme).borderColor,
-      colorBgBase: getThemeStyles(theme).backgroundColor
-    }
-  }
-
+  const { themeConfig } = useTheme()
   return (
-    <ConfigProvider theme={defaultThemeConfig}>
+    <ConfigProvider theme={themeConfig}>
       <RouterProvider router={router} />
     </ConfigProvider>
   )

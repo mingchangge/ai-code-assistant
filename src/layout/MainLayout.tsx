@@ -7,7 +7,7 @@ import SideMenu from './components/SideMenu'
 import useTheme from '@/hooks/useTheme'
 import getThemeStyles from '../utils/getThemeStyles'
 
-import { Layout, Button } from 'antd'
+import { Layout, Button, FloatButton } from 'antd'
 import {
   MenuUnfoldOutlined,
   MenuFoldOutlined,
@@ -20,6 +20,7 @@ const { Header, Sider, Content } = Layout
 // 自定义 Layout 样式
 const StyledLayout = styled(Layout)`
   height: 100%;
+  text-align: left;
 `
 const StyledHeader = styled(Header)<{ theme: 'light' | 'dark' }>`
   display: 'flex';
@@ -27,6 +28,8 @@ const StyledHeader = styled(Header)<{ theme: 'light' | 'dark' }>`
   width: 100%;
   height: 64px;
   background: ${props => getThemeStyles(props.theme).cardBgColor};
+  border-bottom: 1px solid ${props => getThemeStyles(props.theme).borderColor};
+  box-shadow: ${props => getThemeStyles(props.theme).shadow};
   h1 {
     font-size: 24px;
   }
@@ -36,11 +39,26 @@ const StyledHeader = styled(Header)<{ theme: 'light' | 'dark' }>`
     right: 16px;
   }
 `
+const StyledSider = styled(Sider)<{
+  collapsed: boolean
+  theme: 'light' | 'dark'
+}>`
+  width: ${props => (props.collapsed ? '80px' : '200px')};
+  border-right: 1px solid ${props => getThemeStyles(props.theme).borderColor};
+  background: ${props => getThemeStyles(props.theme).cardBgColor};
+  transition: width 0.3s ease;
+  .ant-menu {
+    border-inline-end: none !important;
+    background-color: transparent;
+    text-align: ${props => (props.collapsed ? 'center' : 'left')};
+`
 const StyledContent = styled(Content)<{ theme: 'light' | 'dark' }>`
   margin: 24px 16px;
   padding: 24px;
   min-height: 280px;
   background: ${props => getThemeStyles(props.theme).cardBgColor};
+  border: 1px solid ${props => getThemeStyles(props.theme).borderColor};
+  box-shadow: ${props => getThemeStyles(props.theme).shadow};
 `
 const MainLayout = () => {
   // 侧边栏折叠状态
@@ -50,35 +68,34 @@ const MainLayout = () => {
 
   // 返回布局页面
   return (
-    <StyledLayout theme={theme}>
+    <StyledLayout>
       <StyledHeader theme={theme}>
         <h1>AI Code Assistant</h1>
         <Button
           shape="circle"
           className="theme-toggle"
-          onClick={toggleTheme}
+          icon={theme === 'light' ? <MoonOutlined /> : <SunOutlined />}
           aria-label={theme === 'light' ? '切换到深色模式' : '切换到浅色模式'}
-        >
-          {theme === 'light' ? <MoonOutlined /> : <SunOutlined />}
-        </Button>
+          onClick={toggleTheme}
+        ></Button>
       </StyledHeader>
       <Layout>
-        <Sider
-          style={{ background: '#fff' }}
+        <StyledSider
+          theme={theme}
           trigger={null}
           collapsible
           collapsed={collapsed}
         >
           <SideMenu />
-          <Button
-            style={{ position: 'absolute', right: 0, bottom: 0 }}
-            type="text"
+          <FloatButton
+            style={{ position: 'absolute', right: '4px', bottom: '4px' }}
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            shape="square"
             onClick={() => {
               setCollapsed(!collapsed)
             }}
           />
-        </Sider>
+        </StyledSider>
         <StyledContent theme={theme}>
           <Outlet />
         </StyledContent>

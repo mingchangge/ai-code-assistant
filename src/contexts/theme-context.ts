@@ -1,16 +1,17 @@
-// src/contexts/theme-context.ts
 import { createContext } from 'react'
+import type { ThemeConfig } from 'antd'
 
-// 主题模式类型
+// 定义主题模式类型
 export type ThemeMode = 'light' | 'dark'
 
-// Context 数据类型
+// 定义上下文类型
 export interface ThemeContextType {
   theme: ThemeMode
   toggleTheme: () => void
+  themeConfig: ThemeConfig
 }
 
-// 创建并导出 Context（非组件）
+// 创建上下文
 export const ThemeContext = createContext<ThemeContextType | undefined>(
   undefined
 )

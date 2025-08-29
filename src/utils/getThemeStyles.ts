@@ -12,7 +12,11 @@ const getThemeStyles = (theme: 'light' | 'dark') => ({
   shadow:
     theme === 'light'
       ? '0 2px 8px rgba(0, 0, 0, 0.08)'
-      : '0 2px 8px rgba(0, 0, 0, 0.3)'
+      : '0 2px 8px rgba(0, 0, 0, 0.3)',
+  boxBottomShadow:
+    theme === 'light'
+      ? '0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02)'
+      : '0 1px 2px 0 rgba(255, 255, 255, 0.03), 0 1px 6px -1px rgba(255, 255, 255, 0.02), 0 2px 4px 0 rgba(255, 255, 255, 0.02);'
 })
 
 export default getThemeStyles

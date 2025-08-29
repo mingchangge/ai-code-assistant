@@ -39,7 +39,6 @@ export default function EditorPanel({ files, onChange }: EditorPanelProps) {
         ))}
       </div>
       <Editor
-        height="800px"
         className="editor-box"
         language={getLanguage(tab)}
         value={files[tab]}

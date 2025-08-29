@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button, Flex, Input } from 'antd'
 import { askSpark, assemble } from '@/utils/spark'
 
 interface PromptBoxProps {
@@ -39,21 +40,21 @@ export default function PromptBox({ onFiles }: PromptBoxProps) {
   }
 
   return (
-    <header>
-      <input
+    <Flex gap="small" wrap="nowrap" className="prompt-box">
+      <Input
         type="text"
         placeholder="写一个带动画的登录表单"
         value={prompt}
         onChange={e => {
           setPrompt(e.target.value)
         }}
-        onKeyDown={e => {
-          if (e.key === 'Enter') void handle()
+        onPressEnter={() => {
+          void handle()
         }}
       />
-      <button onClick={() => void handle()} disabled={loading}>
+      <Button type="primary" onClick={() => void handle()} disabled={loading}>
         {loading ? '生成中…' : '星火生成'}
-      </button>
-    </header>
+      </Button>
+    </Flex>
   )
 }

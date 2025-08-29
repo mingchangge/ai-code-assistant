@@ -2,7 +2,6 @@
 // import PromptBox from './PromptBox'
 // import MonacoEditor from './MonacoEditor'
 // import CodePreview from './CodePreview'
-import '@/styles/home.css'
 
 // type FileRecord = Record<string, string>
 export default function Home() {
