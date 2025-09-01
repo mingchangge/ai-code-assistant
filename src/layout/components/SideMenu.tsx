@@ -39,6 +39,12 @@ const SideMenu = () => {
       path: '/monaco-sandpack'
     },
     {
+      key: 'sandpack',
+      icon: <ShoppingOutlined />,
+      label: 'Sandpack',
+      path: '/sandpack'
+    },
+    {
       key: 'stackblitz',
       icon: <ShoppingOutlined />,
       label: 'Stackblitz',

@@ -66,6 +66,7 @@ const MonacoEsbuildWasm = wrapWithSuspense(
 const MonacoSandpack = wrapWithSuspense(
   () => import('@/views/MonacoSandpack/index')
 )
+const Sandpack = wrapWithSuspense(() => import('@/views/Sandpack/index'))
 const Stackblitz = wrapWithSuspense(() => import('@/views/Stackblitz/index'))
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
@@ -85,6 +86,10 @@ const routes: RouteObject[] = [
       {
         path: '/monaco-sandpack',
         element: createElement(MonacoSandpack)
+      },
+      {
+        path: '/sandpack',
+        element: createElement(Sandpack)
       },
       {
         path: '/stackblitz',
