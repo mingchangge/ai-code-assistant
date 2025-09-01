@@ -79,7 +79,7 @@ const StyledFlex = styled.div`
   }
 `
 
-export default function Home() {
+export default function MonacoSandpack() {
   const [files, setFiles] = useState<FileRecord>({
     'index.html': `<!DOCTYPE html>
       <html>

@@ -21,7 +21,7 @@ const StyledBox = styled.div`
   }
 `
 
-export default function Home() {
+export default function Sandpack() {
   const [files] = useState<FileRecord>({
     'index.html': `<!DOCTYPE html>
       <html>

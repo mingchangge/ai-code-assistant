@@ -27,7 +27,7 @@ const StyledCodeBox = styled.div`
     }
   }
 `
-export default function Home() {
+export default function MonacoEsbuildWasm() {
   const [files, setFiles] = useState<FileRecord>({
     'index.html': `<!DOCTYPE html>
       <html>

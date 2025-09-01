@@ -13,7 +13,7 @@ const StyledBox = styled.div`
   }
 `
 
-export default function Home() {
+export default function Stackblitz() {
   const [files] = useState<FileRecord>({
     'index.html': `<!DOCTYPE html>
       <html>
