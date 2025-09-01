@@ -59,14 +59,17 @@ const wrapWithSuspense = <T = DefaultProps>(
 // 路由懒加载
 const MainLayout = wrapWithSuspense(() => import('@/layout/MainLayout'))
 const Home = wrapWithSuspense(() => import('@/views/home/index'))
+
 const MonacoEsbuildWasm = wrapWithSuspense(
   () => import('@/views/MonacoEsbuildWasm/index')
 )
 const MonacoSandpack = wrapWithSuspense(
   () => import('@/views/MonacoSandpack/index')
 )
+const Stackblitz = wrapWithSuspense(() => import('@/views/Stackblitz/index'))
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
+// 路由配置
 const routes: RouteObject[] = [
   {
     path: '/',
@@ -82,6 +85,10 @@ const routes: RouteObject[] = [
       {
         path: '/monaco-sandpack',
         element: createElement(MonacoSandpack)
+      },
+      {
+        path: '/stackblitz',
+        element: createElement(Stackblitz)
       }
     ]
   },
