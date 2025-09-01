@@ -11,9 +11,9 @@ const _monacoEditorPluginMod = require('vite-plugin-monaco-editor') as {
   default: (opts?: PluginOptions) => Plugin
 }
 // 2.取出真正的插件函数并再断言一次
-type PluginOptions = {
+interface PluginOptions {
   languageWorkers?: string[]
-  customWorkers?: Array<{ label: string; entry: string }>
+  customWorkers?: { label: string; entry: string }[]
   publicPath?: string
 }
 // 3. 再断言真正的函数
@@ -41,7 +41,9 @@ export default defineConfig({
         'html'
       ]
     })
-  ]
+  ],
+  // 关键一行：让 Vite 把 .md 当 URL 处理
+  assetsInclude: ['**/*.md']
 })
 
 function pathResolve(dir: string): string {

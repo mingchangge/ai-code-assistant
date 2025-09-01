@@ -1,4 +1,6 @@
-## 代码编辑预览工具使用感受
+# 代码编辑预览工具使用笔记
+
+## 代码编辑预览工具
 
 - @monaco-editor/react 和 @codesandbox/sandpack-react 搭配使用
   - 安装命令：`npm i @monaco-editor/react @codesandbox/sandpack-react`
@@ -25,7 +27,7 @@
   - 编辑页面简单，但是预览功能较弱
   - 预览功能较弱，因为没有代码打包功能，只能预览静态文件
 
-## 剩余选择
+### 剩余选择
 
 | 方案                | 集成成本          | 功能              | 网络要求 | 适用场景             | 备注   |
 | ------------------- | ----------------- | ----------------- | -------- | -------------------- | ------ |
@@ -33,7 +35,7 @@
 | react-playground    | 中（npm）         | 高（支持 npm 包） | 国内 CDN | 需要第三方依赖的示例 | 没试过 |
 | CodeSandbox Embed   | 高（需一次 POST） | 最高（完整 IDE）  | 国内加速 | 复杂项目、团队协作   | 已弃用 |
 
-# TODO （二选一）
+## TODO （二选一）,已选二。
 
 - 卸载不使用的插件：
   - 稍后卸载monaco-editor插件，`npm uninstall @monaco-editor/react`
