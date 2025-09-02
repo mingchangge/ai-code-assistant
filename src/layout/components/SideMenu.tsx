@@ -49,6 +49,12 @@ const SideMenu = () => {
       icon: <ShoppingOutlined />,
       label: 'Stackblitz',
       path: '/stackblitz'
+    },
+    {
+      key: 'codesandbox-embed',
+      icon: <ShoppingOutlined />,
+      label: 'CodeSandbox Embed',
+      path: '/codesandbox-embed'
     }
   ]
 

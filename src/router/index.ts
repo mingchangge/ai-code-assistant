@@ -68,6 +68,9 @@ const MonacoSandpack = wrapWithSuspense(
 )
 const Sandpack = wrapWithSuspense(() => import('@/views/Sandpack/index'))
 const Stackblitz = wrapWithSuspense(() => import('@/views/Stackblitz/index'))
+const CodeSandboxEmbed = wrapWithSuspense(
+  () => import('@/views/CodeSandboxEmbed/index')
+)
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
@@ -94,6 +97,10 @@ const routes: RouteObject[] = [
       {
         path: '/stackblitz',
         element: createElement(Stackblitz)
+      },
+      {
+        path: '/codesandbox-embed',
+        element: createElement(CodeSandboxEmbed)
       }
     ]
   },

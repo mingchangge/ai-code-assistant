@@ -14,7 +14,7 @@
   - 但 **StackBlitz 的冷启动阶段**（几十毫秒级）就已经去 / 拉文件了，当在 index.tsx 里动态地把 index.html 的内容（或其它文件）写到 **StackBlitz** 的 `fileSystem`，真正通过 project API 把文件写进去时，VM 早就因为「没发现 index.html」而回退到默认模板，于是看到的就是慢加载 + 默认页。而读取默认模板，会有js文件报错：`net::ERR_CONNECTION_CLOSED`。比如：`https://cdn.segment.com/analytics.js/v1/ta1kDK49qdEDEfd8KYxI37mW0GPkLKn1/analytics.min.js`
   - 以及加载成功后，会报一些权限类的错误，比如：`Uncaught (in promise) Error: Permission denied to access property "writeFile"`
   - 但编辑预览功能还能使用，不过因为加载缓慢，还是考虑不用这个插件，卸载命令：`npm uninstall @stackblitz/sdk`
-- @webcontainer/api插件，专门的预览插件，但是因为导出commonjs模块，eslint报一堆类型错误，以弃用。
+- @webcontainer/api插件，专门的预览插件，但是因为导出commonjs模块，eslint报一堆类型错误，已弃用。
   - 安装命令：`npm install @webcontainer/api --save-dev`
   - 卸载命令：`npm uninstall @webcontainer/api`。
 
