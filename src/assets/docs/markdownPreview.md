@@ -62,7 +62,7 @@
 
 ## 构建保存修改时实时预览markdown阅读器-第一种方案可行，第二种方案不可行
 
-- (✅)开发时写插件，把任意目录映射成 URL
+- (✅)开发时写插件，把任意目录映射成 URL。（只在 vite dev 时生效）
   - 在 `vite.config.ts` plugins配置中新增**serve-docs-images**
 
     ```ts
@@ -151,6 +151,42 @@
     ```tsx
     ...
     children: <MarkdownReader fileName={fileName} />
+
+    ```
+
+- **生产环境**下需要把 Markdown 与图片 **预渲染成静态资源** 或 **部署时映射目录**
+  - 构建时自动拷贝--**vite.config.ts** 追加一行 `build.copy`
+
+    ```ts
+    import { defineConfig } from 'vite'
+    import react from '@vitejs/plugin-react'
+    import { cpSync } from 'fs'
+
+    export default defineConfig({
+      plugins: [react()],
+      // 开发插件保持不变
+      build: {
+        rollupOptions: {
+          plugins: [
+            {
+              name: 'copy-docs',
+              closeBundle() {
+                // 构建完成后把 docs 整个拷到 dist/docs
+                cpSync('src/assets/docs', 'dist/docs', { recursive: true })
+              }
+            }
+          ]
+        }
+      }
+    })
+    ```
+
+  - **nginx / Apache 静态映射**--把生产服务器的静态目录指到 src/assets/docs：
+    ```nginx
+    # nginx.conf -- 假设项目根目录为 /path/to/project
+    location /docs/ {
+      alias /path/to/project/src/assets/docs/;
+    }
     ```
 
 - (❌)把 `src/assets/docs` 目录**声明成 Vite “公共”目录**，利用 Vite 的 **HMR（热更新）** 机制，文件一变动就**自动触发 fetch**，阅读器实时刷新，**无需改 docs 路径**。
@@ -169,3 +205,20 @@
 
   - 修改`vite.config.ts`文件，增加`publicDir: 'src/assets/docs'`报错：
     ![alt text](./images/image2.png)
+  - 修改`publicDir: 'src/assets/docs'` 以后，**整个目录被当成静态文件根目录，构建产物里包含的 `.wasm`（WebAssembly）文件也被映射到了 `/` 根路径**。浏览器试图把 **HTML 404** 页面 当成 `.wasm` 来解析，于是出现：`WebAssembly.instantiate(): expected magic word 00 61 73 6d, found 3c 21 64 6f ...`错误。
+  - 实践证明：**修改 `publicDir` → 会覆盖默认 `public/` 目录**。（修改前问过AI修改publicDir是否会影响原public文件夹，得到答复说不会受影响，也不会被“覆盖”。后经实践证明，这个说法是错误的。）
+
+## vite项目的**public 目录**
+
+你可以把所有静态资源都放在**public**目录下，包括 HTML、图片、字体、样式表、脚本等。
+
+- 如果你有下列这些资源：
+  - 不会被源码引用（例如 `robots.txt`）
+  - 必须保持原有文件名（没有经过 hash）
+  - ...或者你压根不想引入该资源，只是想得到其 URL。
+
+那么你可以将该资源放在指定的 `public` 目录中，它应位于你的项目根目录。该目录中的资源在开发时能直接通过 `/` 根路径访问到，并且打包时会被完整复制到目标目录的根目录下。
+
+目录默认是 `<root>/public`，但**可以通过 `publicDir` 选项来配置**。
+
+请注意，应该始终使用根绝对路径来引入 `public` 中的资源 —— 举个例子，`public/icon.png` 应该在源码中被引用为 `/icon.png`。
