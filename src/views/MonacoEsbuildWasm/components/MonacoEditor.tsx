@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import * as monaco from 'monaco-editor'
-
 import { formatCode } from '@/utils/format'
 
 interface MonacoEditorProps {
@@ -8,47 +7,50 @@ interface MonacoEditorProps {
   onFilesChange: (next: Record<string, string>) => void
 }
 
-// 编辑器
 export default function MonacoEditor({
   files,
   onFilesChange
 }: MonacoEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
-  const [activeFile, setActiveFile] = useState(Object.keys(files)[0])
+  const [activeFile, setActiveFile] = useState(() => Object.keys(files)[0])
 
-  /* 用 ref 保存最新的 files，避免放到 useEffect 依赖里 */
+  /* 1. 保存最新 files，避免放到 useEffect 依赖里 */
   const filesRef = useRef(files)
   useEffect(() => {
     filesRef.current = files
   }, [files])
 
-  /* 1. 只在挂载时创建一次编辑器 */
+  /* 2. 只在挂载时创建一次编辑器 */
   useEffect(() => {
     if (!containerRef.current) return
-
     editorRef.current = monaco.editor.create(containerRef.current, {
-      value: '', // 初始值为空
-      automaticLayout: true, // 自动调整大小
-      theme: 'vs-dark', // 暗色主题
-      minimap: { enabled: true }, // 开启小地图
-      glyphMargin: false, // 关闭字形边距
-      lineNumbers: 'on', // 显示行号
-      wordWrap: 'on', // 开启换行
-      scrollBeyondLastLine: false, // 禁止滚动到最后一行之后
-      folding: true, // 开启代码折叠
-      language: 'html' // 初始语言
+      value: '',
+      automaticLayout: true,
+      theme: 'vs-dark',
+      minimap: { enabled: true },
+      glyphMargin: false,
+      lineNumbers: 'on',
+      wordWrap: 'on',
+      scrollBeyondLastLine: false,
+      folding: true,
+      language: 'html'
     })
-
     return () => editorRef.current?.dispose()
   }, [])
 
-  // 只在「activeFile」变化时执行，且保证编辑器存活
+  /* 3. 记录「由编辑器自身触发的内容」，防止死循环 */
+  const lastEmittedRef = useRef<string>('')
+
+  /* 4. 负责：
+        • activeFile 变化时切文件
+        • 父组件 files 变化时把最新内容同步到编辑器
+        • 监听用户输入并回传
+  */
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
 
-    // 用 AbortController 防止组件卸载后仍执行
     const ac = new AbortController()
 
     void (async () => {
@@ -58,22 +60,31 @@ export default function MonacoEditor({
           ? 'css'
           : 'javascript'
 
-      const formatted = await formatCode(files[activeFile] ?? '', newLang)
-      if (ac.signal.aborted) return // 组件已卸载
+      const contentFromProps = files[activeFile] ?? ''
 
-      // 1. 旧 model 存在就 dispose
-      editor.getModel()?.dispose()
+      /* 如果父组件传来的内容和编辑器里一致（或刚刚由我们自己 emit），直接跳过 */
+      const currentModel = editor.getModel()
+      if (currentModel?.getValue() === contentFromProps) return
 
-      // 2. 创建并设置新 model
+      /* 否则需要同步到编辑器 */
+      const formatted = await formatCode(contentFromProps, newLang)
+      if (ac.signal.aborted) return
+
+      /* 1. 销毁旧 model */
+      currentModel?.dispose()
+
+      /* 2. 创建并设置新 model */
       const newModel = monaco.editor.createModel(formatted, newLang)
       editor.setModel(newModel)
 
-      // 3. 立即格式化一次（可选）
+      /* 3. 立即格式化一次（可选） */
       void editor.getAction('editor.action.formatDocument')?.run()
 
-      // 4. 监听 model 变化
+      /* 4. 监听用户输入 */
       const disposable = newModel.onDidChangeContent(() => {
-        onFilesChange({ ...files, [activeFile]: newModel.getValue() })
+        const newVal = newModel.getValue()
+        lastEmittedRef.current = newVal // 记录：这次更新来自编辑器内部
+        onFilesChange({ ...filesRef.current, [activeFile]: newVal })
       })
 
       return () => {
@@ -86,7 +97,8 @@ export default function MonacoEditor({
       ac.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFile]) // 只依赖 activeFile，不依赖 files（用 ref 拿最新值）
+  }, [activeFile, files]) // 现在需要把 files 放到依赖里，但内部会做 diff 防止死循环
+  /* 注意：files 变化时，如果 activeFile 没变，也只会更新当前文件的内容 */
 
   return (
     <div className="editor-panel">
@@ -116,7 +128,7 @@ export default function MonacoEditor({
       {/* 编辑器容器 */}
       <div
         ref={containerRef}
-        style={{ width: '100%', height: 'calc(100% - 40px)' }}
+        style={{ width: '100%', height: 'calc(100% - 47px)' }}
       />
     </div>
   )

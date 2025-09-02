@@ -10,6 +10,8 @@ type FileRecord = Record<string, string>
 const StyledCodeBox = styled.div`
   .code-box {
     height: calc(100vh - 238px);
+    border: 1px solid #0e639c;
+    overflow: hidden;
   }
   .prompt-box {
     margin: 1rem 0 1.4rem;
@@ -20,10 +22,19 @@ const StyledCodeBox = styled.div`
     width: 50%;
     height: 100%;
     /* 默认占据一半宽度 */
+    &:nth-child(2) {
+      border-left: 1px solid #0e639c;
+    }
 
     .editor-panel {
       width: 100%;
       height: 100%;
+      .monaco-editor {
+        width: 100% !important;
+        height: 100%;
+        outline: none;
+        border-top: 1px solid #0e639c;
+      }
     }
   }
 `
@@ -51,7 +62,7 @@ export default function MonacoEsbuildWasm() {
   return (
     <StyledCodeBox>
       <PromptBox onFiles={handleFiles} />
-      <Flex gap="small" wrap="nowrap" className="code-box">
+      <Flex wrap="nowrap" className="code-box">
         <div className="flex-1">
           {/* 左侧编辑面板 */}
           <MonacoEditor files={files} onFilesChange={handleFiles} />

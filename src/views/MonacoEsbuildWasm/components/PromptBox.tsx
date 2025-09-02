@@ -15,9 +15,9 @@ export default function PromptBox({ onFiles }: PromptBoxProps) {
     setLoading(true)
     try {
       const raw = await askSpark(
-        `请严格按照以下格式要求返回代码:
-          1. 单段格式（≤1000字符）: {"type":"single","lang":"js","code":{"html":"...","css":"...","js":"..."},"code_length":number,"js_sha256":"..."}
-          2. 多段格式（>1000字符）: {"type":"multi","lang":"js","code_part":number,"code_total_parts":number,"chunk":"...","js_sha256":"..."}
+        `请严格按照 Markdown 代码块标记 \`\`\`json 和 \`\`\`格式，再根据以下要求返回代码:
+          1. 单段格式（≤500字符）: {"type":"single","lang":"js","code":{"html":"...","css":"...","js":"..."},"code_length":number,"js_sha256":"..."}
+          2. 多段格式（>500字符）: {"type":"multi","lang":"js","code_part":number,"code_total_parts":number,"chunk":"...","js_sha256":"..."}
           3. code 字段为 JSON 字符串，内含 html、css、js 三个键；当总长度>1000 时，按 html→css→js 顺序依次拆分，每段≤1000 字符，未用到的键留空字符串。
           4. 确保JSON语法正确，转义字符使用恰当
           5. 只返回JSON内容，不包含其他解释文本

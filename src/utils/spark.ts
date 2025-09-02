@@ -103,33 +103,19 @@ async function sha256(str: string): Promise<string> {
 function parse(raw: string): AiChunk[] {
   console.log('AI 原始回复:', raw)
   const trimmed = raw.trim()
-  /* 允许一条或多条 JSON 行 */
-  return (
-    trimmed
-      .split('\n')
-      .map(l => l.trim())
-      .map(l => {
-        try {
-          const codeBlockRemoved = l
-            .replace(/^`+(json)?\s*/, '')
-            .replace(/\s*`+$/, '')
-            .trim()
-            .replace(/&quot;/g, '"')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-          const fixedLine = codeBlockRemoved.replace(
-            /(^|[{,])\s*'([^']+)'\s*:/g,
-            '$1 "$2":'
-          )
-          return JSON.parse(fixedLine) as AiChunk
-        } catch {
-          return null
-        }
-      })
-      // 关键：使用类型谓词把 null 过滤掉，并让编译器知道结果一定是 AiChunk[]
-      .filter((c): c is AiChunk => c !== null)
-  )
+
+  // 先移除可能的 Markdown 代码块标记 ```json 和 ```
+  const cleaned = trimmed
+    .replace(/^```json\s*/, '')
+    .replace(/\s*```$/, '')
+    .trim()
+
+  try {
+    const parsed = JSON.parse(cleaned) as AiChunk
+    return [parsed] // 包装成数组返回
+  } catch {
+    return []
+  }
 }
 
 /* ---------- 主入口：传入 AI 原始字符串，返回 Promise<Record<ResourceKind, string>> ---------- */
