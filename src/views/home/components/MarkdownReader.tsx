@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import MarkdownIt from 'markdown-it'
 import styled from 'styled-components'
 import 'github-markdown-css/github-markdown.css'
@@ -15,6 +15,8 @@ const StyledArticle = styled.article`
     font-size: 3.2rem;
     font-weight: 900;
     background-size: 100% 200%; /* 垂直方向扩展渐变范围 */
+    /* 优化多行文本的排版平衡，使段落的各行长度更加均匀，避免出现单字成行或某一行明显过短的情况 */
+    text-wrap: balance;
   }
 
   /* H2短标题 - 紫色到亮黄的渐变 */
@@ -26,6 +28,8 @@ const StyledArticle = styled.article`
     font-size: 2.4rem;
     font-weight: 800;
     background-size: 100% 200%;
+    /* 优化多行文本的排版平衡，使段落的各行长度更加均匀，避免出现单字成行或某一行明显过短的情况 */
+    text-wrap: balance;
   }
 
   /* H3短标题 - 深绿到亮橙的渐变 */
@@ -37,6 +41,8 @@ const StyledArticle = styled.article`
     font-size: 2rem;
     font-weight: 700;
     background-size: 100% 200%;
+    /* 优化多行文本的排版平衡，使段落的各行长度更加均匀，避免出现单字成行或某一行明显过短的情况 */
+    text-wrap: balance;
   }
   img {
     width: 100%;
@@ -49,19 +55,31 @@ const md = new MarkdownIt({
   typographer: true
 })
 interface Props {
-  mdUrl: string
+  fileName: string
 }
 
-const MarkdownReader = ({ mdUrl }: Props) => {
-  const [html, setHtml] = useState('')
+// markdown 文件预览
+const MarkdownReader = ({ fileName }: Props) => {
+  const [html, setHtml] = useState<string>('')
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/docs/${fileName}`)
+      const src = await res.text()
+      setHtml(md.render(src))
+    } catch {
+      setHtml('<p>加载失败</p>')
+    }
+  }, [fileName])
 
   useEffect(() => {
-    void fetch(mdUrl)
-      .then(r => r.text())
-      .then(src => {
-        setHtml(md.render(src))
-      })
-  }, [mdUrl])
+    void load()
+
+    // 监听 HMR：vite 文件变动后触发
+    if (import.meta.hot) {
+      import.meta.hot.on('vite:beforeUpdate', () => void load())
+    }
+  }, [load])
 
   return (
     <StyledArticle

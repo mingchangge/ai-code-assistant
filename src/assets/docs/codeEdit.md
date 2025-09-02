@@ -6,7 +6,7 @@
   - 安装命令：`npm i @monaco-editor/react @codesandbox/sandpack-react`
   - @monaco-editor/react 用于代码编辑
   - @codesandbox/sandpack-react 用于代码预览，（也支持代码编辑）但是加载缓慢，国内很容易time out，卸载命令：`npm uninstall @codesandbox/sandpack-react`。Sandpack 是 CodeSandbox 团队开源的浏览器内打包器，依赖全部走本地 ServiceWorker，首次 1-2 s，后续 50 ms 热更新。说的很好听，用起来不太方便，刷新页面加载慢，预览容易time out。
-    ![alt text](image.png)
+    ![alt text](./images/image.png)
 - @stackblitz/sdk：可以同时支持代码编辑和预览
   - 安装命令：`npm i -D @stackblitz/sdk`
   - 包含webcontainer/api 插件，用于在浏览器中运行代码

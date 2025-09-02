@@ -1,3 +1,5 @@
+# 导入 CommonJS 模块
+
 - 项目强制使用 ESM（package.json 中有 "type": "module"），如果使用 CommonJS导出的插件会报错，可以使用以下方式导入：
   - 使用 createRequire,推荐,是目前最稳定、同步、兼容 Node.js ESM 的方式
 

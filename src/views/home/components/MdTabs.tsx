@@ -16,9 +16,25 @@ interface TabItem {
   url: string
 }
 
+// 格式化文件名
+const formatFileName = (fileName: string) => {
+  // 去除.md后缀
+  const nameWithoutExt: string = fileName.replace(/^.*\/([^/]+)\.md$/, '$1')
+
+  // 处理包含-的情况，拆分后首字母大写再拼接
+  const words = nameWithoutExt.split('-')
+  const capitalizedWords = words.map(word => {
+    // 首字母大写，其余字母保持原样
+    return word.charAt(0).toUpperCase() + word.slice(1)
+  })
+
+  // 拼接并添加Notes
+  return capitalizedWords.join('') + 'Notes'
+}
 const tabs: TabItem[] = Object.entries(mdMap).map(([filePath, url]) => {
-  const key = filePath.replace(/^.*\/([^/]+)\.md$/, '$1') // 文件名作为 key
-  return { key, label: key.replace(/\w/, c => c.toUpperCase()) + 'Notes', url }
+  const key = formatFileName(filePath) // 文件名作为 key
+  const fileName = url.split('/').pop() ?? ''
+  return { key, label: key, url: fileName }
 })
 
 export default function MdTabs() {
@@ -34,7 +50,7 @@ export default function MdTabs() {
       items={tabs.map(({ key, label, url }) => ({
         key,
         label,
-        children: <MarkdownReader mdUrl={url} />
+        children: <MarkdownReader fileName={url} />
       }))}
     />
   )

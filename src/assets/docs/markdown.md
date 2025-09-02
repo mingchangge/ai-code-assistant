@@ -21,6 +21,9 @@
 - 引入完成后，在项目中使用markdown实例渲染markdown文件：
 
   ```tsx
+  interface Props {
+    mdUrl: string
+  }
   const MarkdownReader = ({ mdUrl }: Props) => {
     const [html, setHtml] = useState('')
 
@@ -56,3 +59,113 @@
   import MarkdownReader from './MarkdownReader'
   ;<MarkdownReader mdUrl="/path/to/markdown.md" />
   ```
+
+## 构建保存修改时实时预览markdown阅读器-第一种方案可行，第二种方案不可行
+
+- (✅)开发时写插件，把任意目录映射成 URL
+  - 在 `vite.config.ts` plugins配置中新增**serve-docs-images**
+
+    ```ts
+    ...
+    plugins: [
+      ...
+      {
+        name: 'serve-docs-images',
+        apply: 'serve', // 只在 dev server 生效
+        configureServer(server) {
+          // 1️⃣ Markdown 文件
+          server.middlewares.use('/docs', (req, res, next) => {
+            if (!req.url) {
+              next()
+              return
+            }
+            // 去掉首字母 /，拼成文件系统路径
+            const file = resolve('src/assets/docs', req.url.slice(1))
+            try {
+              const content = readFileSync(file, 'utf-8')
+              res.setHeader('Content-Type', 'text/markdown')
+              res.end(content)
+            } catch {
+              next() // 交给下一条规则（图片）
+            }
+          })
+
+          // 2️⃣ 图片资源
+          server.middlewares.use('/images', (req, res, next) => {
+            if (!req.url) {
+              next()
+              return
+            }
+            // 去掉首字母 /，拼成文件系统路径
+            const file = resolve('src/assets/docs/images', req.url.slice(1))
+            try {
+              const stat = statSync(file)
+              if (!stat.isFile()) {
+                next()
+                return
+              }
+              // 让浏览器按二进制流下载
+              const stream = createReadStream(file)
+              stream.pipe(res)
+            } catch {
+              res.statusCode = 404
+              res.end('Not found')
+            }
+          })
+        }
+      }
+    ],
+    ```
+
+  - 组件监听 HMR 事件(**src/components/MarkdownReader.tsx**)
+
+    ```tsx
+    ...
+    const MarkdownReader: React.FC<Props> = ({ fileName }) => {
+      const [html, setHtml] = useState<string>('')
+
+      const load = async () => {
+        try {
+          const res = await fetch(`/docs/${fileName}`)
+          const src = await res.text()
+          setHtml(md.render(src))
+        } catch {
+          setHtml('<p>加载失败</p>')
+        }
+      }
+
+      useEffect(() => {
+        load()
+
+        // 监听 HMR：vite 会把 /docs/** 当作模块，文件改动会触发 update
+        if (import.meta.hot) {
+          import.meta.hot.on('vite:beforeUpdate', () => load())
+        }
+      }, [fileName])
+
+    ...
+    ```
+
+  - 父组件保持不变, `src/components/MdTabs.tsx` 里只要把 `mdUrl` 换成 `fileName` 即可：
+
+    ```tsx
+    ...
+    children: <MarkdownReader fileName={fileName} />
+    ```
+
+- (❌)把 `src/assets/docs` 目录**声明成 Vite “公共”目录**，利用 Vite 的 **HMR（热更新）** 机制，文件一变动就**自动触发 fetch**，阅读器实时刷新，**无需改 docs 路径**。
+  - 声明目录为 `public`（不改物理位置）
+
+    ```ts
+    import { defineConfig } from 'vite'
+    import react from '@vitejs/plugin-react'
+
+    export default defineConfig({
+      plugins: [react()],
+      // 把 src/assets/docs 当作 /docs 暴露出来
+      publicDir: 'src/assets/docs'
+    })
+    ```
+
+  - 修改`vite.config.ts`文件，增加`publicDir: 'src/assets/docs'`报错：
+    ![alt text](./images/image2.png)
