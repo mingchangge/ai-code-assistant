@@ -74,7 +74,9 @@ const CodeSandboxEmbed = wrapWithSuspense(
 const MultiSparkCode = wrapWithSuspense(
   () => import('@/views/MultiSparkCode/SparkCodeHttp')
 )
-
+const IntersectionObserverExample = wrapWithSuspense(
+  () => import('@/views/IntersectionObserver/index')
+)
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
@@ -108,6 +110,10 @@ const routes: RouteObject[] = [
       {
         path: '/codesandbox-embed',
         element: createElement(CodeSandboxEmbed)
+      },
+      {
+        path: '/intersection-observer',
+        element: createElement(IntersectionObserverExample)
       }
     ]
   },

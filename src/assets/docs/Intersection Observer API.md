@@ -1,4 +1,4 @@
-# Intersection Observer API
+# Intersection Observer API 交叉观察器
 
 Intersection Observer API 是一种现代浏览器提供的高性能、异步监听元素与视口（或指定祖先元素）交叉状态变化的接口。它解决了传统 `scroll` 事件监听方式带来的性能瓶颈，常用于实现**图片懒加载、无限滚动、元素动画触发、曝光统计**等功能。
 
