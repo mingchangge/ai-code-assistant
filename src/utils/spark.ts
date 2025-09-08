@@ -78,7 +78,6 @@ interface SingleChunk {
   code_length: number
   js_sha256?: string
 }
-
 interface MultiChunk {
   type: 'multi'
   lang: ResourceKind

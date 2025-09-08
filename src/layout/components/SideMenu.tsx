@@ -27,6 +27,12 @@ const SideMenu = () => {
       path: '/'
     },
     {
+      key: 'multi-spark-code',
+      icon: <InfoCircleOutlined />,
+      label: 'Multi Spark Code',
+      path: '/multi-spark-code'
+    },
+    {
       key: 'monaco-esbuild-wasm',
       icon: <InfoCircleOutlined />,
       label: 'Monaco + esbuild-wasm',

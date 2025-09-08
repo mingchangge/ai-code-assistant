@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import type { Plugin } from 'vite'
 import { createRequire } from 'module'
 import { resolve } from 'path'
@@ -23,73 +23,87 @@ const monacoEditorPlugin = _monacoEditorPluginMod.default as (
 ) => Plugin
 
 // https://vite.dev/config/
-export default defineConfig({
-  resolve: {
-    alias: {
-      '@': pathResolve('./src')
+export default defineConfig(({ command, mode }) => {
+  console.log('command', command)
+  const env = loadEnv(mode, process.cwd(), '')
+  return {
+    resolve: {
+      alias: {
+        '@': pathResolve('./src')
+      },
+      extensions: ['.js', '.json', '.ts', '.tsx']
     },
-    extensions: ['.js', '.json', '.ts', '.tsx']
-  },
-  plugins: [
-    react(),
-    monacoEditorPlugin({
-      languageWorkers: [
-        'editorWorkerService',
-        'typescript',
-        'json',
-        'html',
-        'css',
-        'html'
-      ]
-    }),
-    {
-      name: 'serve-docs-images',
-      apply: 'serve', // 只在 dev server 生效
-      configureServer(server) {
-        // 1️⃣ Markdown 文件
-        server.middlewares.use('/docs', (req, res, next) => {
-          if (!req.url) {
-            next()
-            return
-          }
-          // 去掉首字母 /，拼成文件系统路径
-          const file = resolve('src/assets/docs', req.url.slice(1))
-          try {
-            const content = readFileSync(file, 'utf-8')
-            res.setHeader('Content-Type', 'text/markdown')
-            res.end(content)
-          } catch {
-            next() // 交给下一条规则（图片）
-          }
-        })
-
-        // 2️⃣ 图片资源
-        server.middlewares.use('/images', (req, res, next) => {
-          if (!req.url) {
-            next()
-            return
-          }
-          // 去掉首字母 /，拼成文件系统路径
-          const file = resolve('src/assets/docs/images', req.url.slice(1))
-          try {
-            const stat = statSync(file)
-            if (!stat.isFile()) {
+    server: {
+      proxy: {
+        '/api-spark': {
+          target: env.VITE_API_URL,
+          changeOrigin: true,
+          rewrite: path => path.replace(/^\/api-spark/, ''),
+          secure: false
+        }
+      }
+    },
+    plugins: [
+      react(),
+      monacoEditorPlugin({
+        languageWorkers: [
+          'editorWorkerService',
+          'typescript',
+          'json',
+          'html',
+          'css',
+          'html'
+        ]
+      }),
+      {
+        name: 'serve-docs-images',
+        apply: 'serve', // 只在 dev server 生效
+        configureServer(server) {
+          // 1️⃣ Markdown 文件
+          server.middlewares.use('/docs', (req, res, next) => {
+            if (!req.url) {
               next()
               return
             }
-            // 让浏览器按二进制流下载
-            const stream = createReadStream(file)
-            stream.pipe(res)
-          } catch {
-            res.statusCode = 404
-            res.end('Not found')
-          }
-        })
+            // 去掉首字母 /，拼成文件系统路径
+            const file = resolve('src/assets/docs', req.url.slice(1))
+            try {
+              const content = readFileSync(file, 'utf-8')
+              res.setHeader('Content-Type', 'text/markdown')
+              res.end(content)
+            } catch {
+              next() // 交给下一条规则（图片）
+            }
+          })
+
+          // 2️⃣ 图片资源
+          server.middlewares.use('/images', (req, res, next) => {
+            if (!req.url) {
+              next()
+              return
+            }
+            // 去掉首字母 /，拼成文件系统路径
+            const file = resolve('src/assets/docs/images', req.url.slice(1))
+            try {
+              const stat = statSync(file)
+              if (!stat.isFile()) {
+                next()
+                return
+              }
+              // 让浏览器按二进制流下载
+              const stream = createReadStream(file)
+              stream.pipe(res)
+            } catch {
+              res.statusCode = 404
+              res.end('Not found')
+            }
+          })
+        }
       }
-    }
-  ],
-  // 关键一行：让 Vite 把 .md 当 URL 处理
-  assetsInclude: ['**/*.md']
+    ],
+    // 关键一行：让 Vite 把 .md 当 URL 处理
+    assetsInclude: ['**/*.md']
+  }
 })
 
 function pathResolve(dir: string): string {

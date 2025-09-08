@@ -71,6 +71,10 @@ const Stackblitz = wrapWithSuspense(() => import('@/views/Stackblitz/index'))
 const CodeSandboxEmbed = wrapWithSuspense(
   () => import('@/views/CodeSandboxEmbed/index')
 )
+const MultiSparkCode = wrapWithSuspense(
+  () => import('@/views/MultiSparkCode/SparkCodeHttp')
+)
+
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
@@ -81,7 +85,10 @@ const routes: RouteObject[] = [
     children: [
       // 关键：默认子路由（匹配/时，<Outlet />渲染Home）
       { index: true, element: createElement(Home) },
-
+      {
+        path: '/multi-spark-code',
+        element: createElement(MultiSparkCode)
+      },
       {
         path: '/monaco-esbuild-wasm',
         element: createElement(MonacoEsbuildWasm)
