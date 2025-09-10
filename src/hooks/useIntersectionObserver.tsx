@@ -1,46 +1,91 @@
 import { useEffect, useRef, useState } from 'react'
 
-type UseIntersectionObserverOptions = IntersectionObserverInit & {
+type Options = IntersectionObserverInit & {
   triggerOnce?: boolean
+  cooldown?: number
 }
-function useIntersectionObserver(options: UseIntersectionObserverOptions = {}) {
+
+export default function useIntersectionObserver<
+  T extends Element = HTMLDivElement
+>(options: Options = {}) {
+  const ref = useRef<T | null>(null)
   const [isIntersecting, setIsIntersecting] = useState(false)
-  const [entry, setEntry] = useState<IntersectionObserverEntry | null>(null)
-  const ref = useRef<Element>(null)
-  const observerRef = useRef<IntersectionObserver>(null)
+  const hasTriggered = useRef(false)
+  const lastTriggerTime = useRef(0)
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const isPaused = useRef(false) // 新增：用于暂停观察器
 
-  useEffect(() => {
-    // 创建 Intersection Observer
-    observerRef.current = new IntersectionObserver(
-      ([entry]) => {
-        setEntry(entry)
-        setIsIntersecting(entry.isIntersecting)
+  // 暂停观察器
+  const pause = () => {
+    isPaused.current = true
+  }
 
-        // 如果元素进入视口且只观察一次，可以取消观察，应用场景：图片懒加载、滚动触发动画、曝光上报
-        if (entry.isIntersecting && options.triggerOnce) {
-          observerRef.current?.unobserve(entry.target)
-        }
-      },
-      {
-        root: options.root ?? undefined,
-        rootMargin: options.rootMargin ?? '0px',
-        threshold: options.threshold ?? 0.1
-      }
-    )
+  // 恢复观察器
+  const resume = () => {
+    isPaused.current = false
+    hasTriggered.current = false
+  }
 
-    // 开始观察元素
-    if (ref.current) {
+  // 重置观察器
+  const reset = () => {
+    hasTriggered.current = false
+    isPaused.current = false
+    setIsIntersecting(false)
+    if (ref.current && observerRef.current) {
+      observerRef.current.unobserve(ref.current)
       observerRef.current.observe(ref.current)
     }
+  }
 
-    // 清理函数
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    const {
+      triggerOnce = false,
+      root = null,
+      rootMargin = '0px',
+      threshold = 0.1,
+      cooldown = 500
+    } = options
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // 如果观察器被暂停，不处理任何事件
+        if (isPaused.current) return
+
+        const now = Date.now()
+        if (now - lastTriggerTime.current < cooldown) {
+          return
+        }
+
+        if (triggerOnce && hasTriggered.current) {
+          return
+        }
+
+        if (entry.isIntersecting) {
+          setIsIntersecting(true)
+          lastTriggerTime.current = now
+
+          if (triggerOnce) {
+            hasTriggered.current = true
+            observer.unobserve(el)
+          }
+        } else if (!triggerOnce) {
+          setIsIntersecting(false)
+        }
+      },
+      { root, rootMargin, threshold }
+    )
+
+    observerRef.current = observer
+    observer.observe(el)
+
     return () => {
-      if (observerRef.current && ref.current) {
-        observerRef.current.unobserve(ref.current)
-      }
+      observer.disconnect()
+      observerRef.current = null
     }
-  }, [options.root, options.rootMargin, options.threshold, options.triggerOnce])
+  }, [options])
 
-  return [ref, isIntersecting, entry]
+  return [ref, isIntersecting, { pause, resume, reset }] as const
 }
-export default useIntersectionObserver
