@@ -29,7 +29,7 @@ const formatFileName = (fileName: string) => {
   })
 
   // 拼接并添加Notes
-  return capitalizedWords.join('').replace(/\s+/g, '') + 'Notes'
+  return capitalizedWords.join('').replace(/\s+/g, '')
 }
 const tabs: TabItem[] = Object.entries(mdMap).map(([filePath, url]) => {
   const key = formatFileName(filePath) // 文件名作为 key

@@ -83,6 +83,12 @@ const SideMenu = () => {
       icon: <ShoppingOutlined />,
       label: 'IntersectionObserver',
       path: '/intersection-observer'
+    },
+    {
+      key: 'react-basics',
+      icon: <ShoppingOutlined />,
+      label: 'React Basics',
+      path: '/react-basics'
     }
   ]
 

@@ -77,6 +77,7 @@ const MultiSparkCode = wrapWithSuspense(
 const IntersectionObserverExample = wrapWithSuspense(
   () => import('@/views/IntersectionObserver/index')
 )
+const ReactBasics = wrapWithSuspense(() => import('@/views/ReactBasics/index'))
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
@@ -114,6 +115,10 @@ const routes: RouteObject[] = [
       {
         path: '/intersection-observer',
         element: createElement(IntersectionObserverExample)
+      },
+      {
+        path: '/react-basics',
+        element: createElement(ReactBasics)
       }
     ]
   },

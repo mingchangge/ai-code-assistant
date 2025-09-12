@@ -1,0 +1,131 @@
+h1 {
+    font-size: 3.2rem;
+    font-weight: 900;
+    /* 优化多行文本的排版平衡，使段落的各行长度更加均匀，避免出现单字成行或某一行明显过短的情况 */
+    text-wrap: balance;
+    background: linear-gradient(183deg, #0066ff 17%, #00cc99 72%);
+    /* 足够大，保证移动空间  */
+    background-size: 200% 200%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: flow 3s linear infinite;
+}
+
+@keyframes flow {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+
+    /* 回到起点，无缝衔接 */
+}
+
+.title {
+    font-size: 24px;
+    background:
+        radial-gradient(circle at 50% 0,
+            rgba(255, 0, 0, 0.5),
+            rgba(255, 0, 0, 0) 70.71%),
+        radial-gradient(circle at 6.7% 75%,
+            rgba(0, 0, 255, 0.5),
+            rgba(0, 0, 255, 0) 70.71%),
+        radial-gradient(circle at 93.3% 75%,
+            rgba(0, 255, 0, 0.5),
+            rgba(0, 255, 0, 0) 70.71%) beige;
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: maskedAnimation 4s infinite linear;
+}
+
+@keyframes maskedAnimation {
+    0% {
+        background-position: 0 0;
+    }
+
+    50% {
+        background-position: 100% 100%;
+    }
+
+    100% {
+        background-position: 0 0;
+    }
+}
+
+.normal {
+    font-size: 1.6rem;
+    font-weight: 400;
+    background-image: -webkit-linear-gradient(left, #147B96, #E6D205 25%, #147B96 50%, #E6D205 75%, #147B96);
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: maskedAnimation1 4s infinite linear;
+}
+
+@keyframes maskedAnimation1 {
+    0% {
+        background-position: 0 0;
+    }
+
+    50% {
+        background-position: -100% 0;
+    }
+
+    100% {
+        background-position: 0 0;
+    }
+}
+
+.card {
+    position: relative;
+    z-index: 0;
+    width: 280px;
+    height: 180px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+}
+
+.card::before {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    /* 边框厚度 4px */
+    border-radius: inherit;
+    background: conic-gradient(from 0deg,
+            #00ffff 0deg,
+            #ff00ff 90deg,
+            #ffff00 180deg,
+            #00ff00 270deg,
+            #00ffff 360deg);
+    z-index: -1;
+
+    /* 关键：把中间挖掉，只留 4px 边 */
+    -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    padding: 4px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
