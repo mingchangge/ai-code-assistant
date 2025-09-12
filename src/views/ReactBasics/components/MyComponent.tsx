@@ -12,6 +12,7 @@ function MyComponent() {
       <p className="normal card" style={{ border: info.border }}>
         这是一个段落
       </p>
+      <p className="normal2">这是一个段落2</p>
     </>
   )
 }
