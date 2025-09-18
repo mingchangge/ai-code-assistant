@@ -64,61 +64,105 @@ function MyComponent() {
 export default MyComponent
 ```
 
-# 题外话
+## 列表渲染
 
-## 下面代码在浏览器的.card::before元素中可以看到角度的变化，但是却没在浏览器上出现动画效果
-
-```html
-<div className="card">
-  <p className="normal">这是一个段落</p>
-</div>
+```jsx
+const products = [
+  { title: 'Cabbage', id: 1 },
+  { title: 'Garlic', id: 2 },
+  { title: 'Apple', id: 3 }
+]
+const listItem = products.map(product => (
+  <li key={product.id}>{product.title}</li>
+))
+return <ul>{listItem}</ul>
 ```
 
-```css
-/* 注册自定义属性 */
-@property --angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
-.card::before {
-  content: '';
-  position: absolute;
-  inset: -4px;
-  /* 边框厚度 */
-  border-radius: inherit;
-  background: linear-gradient(var(--angle), #5ddcff, #3c67e3 43%, #4e00c2);
-  animation: spin 2.5s linear infinite;
-  z-index: -1;
-}
+或
 
-@keyframes spin {
-  to {
-    --angle: 360deg;
+```jsx
+return (
+  <ul>
+    {products.map(product => (
+      <li key={product.id}>{product.title}</li>
+    ))}
+  </ul>
+)
+```
+
+`<li>` 有一个 `key` 属性。对于列表中的每一个元素，你都应该传递一个字符串或者数字给 `key`，用于在其兄弟节点中唯一标识该元素。通常 `key` 来自你的数据，比如数据库中的 ID。如果你在后续插入、删除或重新排序这些项目，React 将依靠你提供的 key 来思考发生了什么。
+
+## 响应事件
+
+```jsx
+function MyButton() {
+  const handleClick = () => {
+    console.log('click')
   }
+  return <button onClick={handleClick}>My Button</button>
 }
+export default MyButton
 ```
 
-### 原因：
+`onClick={handleClick}` 的结尾**没有**小括号！不要 **调用** 事件处理函数：你只需 **把函数传递给事件** 即可。当用户点击按钮时 React 会调用你传递的事件处理函数。
 
-`--angle` 在 `@keyframes` 里被当成**普通的自定义属性**来理解，而**不是**注册后的 `<angle>` 类型变量；  
-Chrome 目前只会对**显式写死**的 `transform: rotate(var(--angle))` 做插值，却不会重新解析 `linear-gradient(var(--angle), …)` 里的角度。
-换句话说：- 你在 DevTools → Elements → Computed 里能看到 `--angle` 从 0deg → 360deg 递增；- 但 `linear-gradient` 的角度在**第一帧就被固化**了，后续不会再重算，所以视觉上“不动”。
-官方结论：
-这是**已知限制**，而不是你写错：
+## 状态(state)
 
-- [CSS Images 4](https://drafts.csswg.org/css-images-4/#linear-gradient-syntax) 里允许 `<angle>` 用变量；
-- 但 Blink（Chrome）目前**只对 `transform`/`opacity` 等“可插值列表”做运行时重算**，渐变函数里的角度变量**不会触发重绘**。
-- 因此 `@property` + `linear-gradient(var(--angle))` 在 `@keyframes` 里**还不生效**。
+```jsx
+import { useState } from 'react'
 
-### 什么时候能用？
-
-等 Chrome 实现“渐变函数内插值”后（官方 issue 还在开），下面代码才会真正动起来：
-
-```css
-@keyframes spin {
-  to {
-    --angle: 360deg;
-  } /* 目前只会改值，不会重算渐变 */
+function MyButton() {
+  const [count, setCount] = useState(0)
+  const handleClick = () => {
+    setCount(count + 1)
+  }
+  return <button onClick={handleClick}>My Button {count}</button>
 }
+export default MyButton
+```
+
+`useState` 是一个 React Hook。它让你在函数组件中添加状态。`useState` 接受状态的初始值，并返回一个包含当前状态和更新该状态的函数的数组。你可以多次调用 `useState` 来添加多个状态变量。
+
+## 使用Hook
+
+以 `use` 开头的函数被称为 **Hook**。**useState** 是 React 提供的一个内置 Hook。你可以在 [React API](https://zh-hans.react.dev/reference/react) 参考 中找到其他内置的 Hook。你也可以通过组合现有的 Hook 来编写属于你自己的 Hook。
+
+Hook 比普通函数更为严格。你只能在你的组件（或其他 Hook）的 **顶层** 调用 Hook。如果你想在一个条件或循环中使用 `useState`，请提取一个新的组件并在组件内部使用它。
+
+## 共享状态
+
+有时你希望多个组件共享状态。你可以将状态提升到它们的最近公共父组件中，然后通过 props 将状态和更新状态的函数传递给子组件。
+父组件：
+
+```jsx
+import { useState } from 'react'
+import MyButtonShared from './components/MyButton2'
+function ReactBasics() {
+  const [count, setCount] = useState(0)
+  const handleClick = () => {
+    setCount(count + 1)
+  }
+  return (
+    <div>
+      <MyButtonShared count={count} onClick={handleClick} />
+      <MyButtonShared count={count} onClick={handleClick} />
+    </div>
+  )
+}
+export default ReactBasics
+```
+
+子组件：
+
+```jsx
+function MyButtonShared({
+  count,
+  onClick
+}: {
+  count: number
+  onClick: () => void
+}) {
+  return <button onClick={onClick}>My Button {count}</button>
+}
+export default MyButtonShared
 ```

@@ -73,8 +73,6 @@ h1 {
 }
 
 .normal2 {
-    margin: 20px;
-    width: 170px;
     font-size: 1.6rem;
     font-weight: 400;
     background-image: linear-gradient(90deg, red, blue);
@@ -95,49 +93,5 @@ h1 {
 
     100% {
         background-position: 0 0;
-    }
-}
-
-.card {
-    position: relative;
-    z-index: 0;
-    width: 280px;
-    height: 180px;
-    border-radius: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: visible;
-}
-
-.card::before {
-    content: "";
-    position: absolute;
-    inset: -4px;
-    /* 边框厚度 4px */
-    border-radius: inherit;
-    background: conic-gradient(from 0deg,
-            #00ffff 0deg,
-            #ff00ff 90deg,
-            #ffff00 180deg,
-            #00ff00 270deg,
-            #00ffff 360deg);
-    z-index: -1;
-
-    /* 关键：把中间挖掉，只留 4px 边 */
-    -webkit-mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask:
-        linear-gradient(#000 0 0) content-box,
-        linear-gradient(#000 0 0);
-    mask-composite: exclude;
-    padding: 4px;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
     }
 }
