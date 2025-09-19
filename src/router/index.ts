@@ -63,6 +63,9 @@ const Home = wrapWithSuspense(() => import('@/views/home/index'))
 const MonacoEsbuildWasm = wrapWithSuspense(
   () => import('@/views/MonacoEsbuildWasm/index')
 )
+const MultiMonacoEsbuildWasm = wrapWithSuspense(
+  () => import('@/views/MultiMonacoEsbuildWasm/index')
+)
 const MonacoSandpack = wrapWithSuspense(
   () => import('@/views/MonacoSandpack/index')
 )
@@ -78,6 +81,10 @@ const IntersectionObserverExample = wrapWithSuspense(
   () => import('@/views/IntersectionObserver/index')
 )
 const ReactBasics = wrapWithSuspense(() => import('@/views/ReactBasics/index'))
+const JsNewFeature = wrapWithSuspense(
+  () => import('@/views/JsNewFeature/index')
+)
+
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
@@ -95,6 +102,10 @@ const routes: RouteObject[] = [
       {
         path: '/monaco-esbuild-wasm',
         element: createElement(MonacoEsbuildWasm)
+      },
+      {
+        path: '/multi-monaco-esbuild-wasm',
+        element: createElement(MultiMonacoEsbuildWasm)
       },
       {
         path: '/monaco-sandpack',
@@ -119,6 +130,10 @@ const routes: RouteObject[] = [
       {
         path: '/react-basics',
         element: createElement(ReactBasics)
+      },
+      {
+        path: '/js-new-features',
+        element: createElement(JsNewFeature)
       }
     ]
   },

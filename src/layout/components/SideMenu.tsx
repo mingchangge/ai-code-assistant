@@ -43,6 +43,12 @@ const SideMenu = () => {
           icon: <InfoCircleOutlined />,
           label: 'Monaco + esbuild-wasm',
           path: '/monaco-esbuild-wasm'
+        },
+        {
+          key: 'multi-monaco-esbuild-wasm',
+          icon: <InfoCircleOutlined />,
+          label: 'Multi Monaco + esbuild-wasm',
+          path: '/multi-monaco-esbuild-wasm'
         }
       ]
     },
@@ -89,6 +95,12 @@ const SideMenu = () => {
       icon: <ShoppingOutlined />,
       label: 'React Basics',
       path: '/react-basics'
+    },
+    {
+      key: 'js-new-features',
+      icon: <ShoppingOutlined />,
+      label: 'JavaScript 新特性',
+      path: '/js-new-features'
     }
   ]
 

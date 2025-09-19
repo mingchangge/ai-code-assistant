@@ -150,6 +150,14 @@ const FontBox = styled.div`
       .article-box {
         height: 100%;
         overflow: auto;
+        background: #fff;
+        h2 {
+          background-image: linear-gradient(90deg, red, blue);
+          background-size: 200% 100%;
+          background-clip: text;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
       }
       .article {
         background: #fff;
@@ -189,7 +197,7 @@ function MyComponent() {
           </div>
         </div>
         <div className="grid-item">
-          <div className="normal2 card">
+          <div className="card">
             <div className="code-block-wrapper">
               <div className="article-box">
                 <h2>text-decoration-thickness 装饰线粗细</h2>
