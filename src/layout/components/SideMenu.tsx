@@ -101,6 +101,12 @@ const SideMenu = () => {
       icon: <ShoppingOutlined />,
       label: 'JavaScript 新特性',
       path: '/js-new-features'
+    },
+    {
+      key: 'fixed-equation-visualizer',
+      icon: <ShoppingOutlined />,
+      label: '方程可视化',
+      path: '/fixed-equation-visualizer'
     }
   ]
 

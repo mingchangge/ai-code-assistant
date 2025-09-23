@@ -84,6 +84,9 @@ const ReactBasics = wrapWithSuspense(() => import('@/views/ReactBasics/index'))
 const JsNewFeature = wrapWithSuspense(
   () => import('@/views/JsNewFeature/index')
 )
+const EquationVisualizer = wrapWithSuspense(
+  () => import('@/views/FixedEquationVisualizer/index')
+)
 
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
@@ -134,6 +137,10 @@ const routes: RouteObject[] = [
       {
         path: '/js-new-features',
         element: createElement(JsNewFeature)
+      },
+      {
+        path: '/fixed-equation-visualizer',
+        element: createElement(EquationVisualizer)
       }
     ]
   },
