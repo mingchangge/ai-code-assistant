@@ -8,7 +8,8 @@ import {
   Space,
   Tag,
   Divider,
-  Switch
+  Switch,
+  Image
 } from 'antd'
 import {
   ScanOutlined,
@@ -22,7 +23,7 @@ import {
   type BodyCompositionData,
   processRecognitionText
 } from '@/utils/textParser'
-import { ImageProcessor } from '@/utils/imageProcessor'
+import { preprocessImage } from '@/utils/imageProcessor'
 
 const { Text } = Typography
 
@@ -35,14 +36,13 @@ const ImageRecognizer = ({
   imageData,
   onRecognitionComplete
 }: ImageRecognizerProps) => {
-  console.log('ImageRecognizer imageData', imageData)
   const [isRecognizing, setIsRecognizing] = useState<boolean>(false)
   const [recognitionProgress, setRecognitionProgress] = useState<number>(0)
   const [recognitionError, setRecognitionError] = useState<string | null>(null)
   const [rawText, setRawText] = useState<string>('')
   const [parsedData, setParsedData] = useState<BodyCompositionData | null>(null)
   const [worker, setWorker] = useState<Worker | null>(null)
-  const [useEnhancement, setUseEnhancement] = useState<boolean>(true)
+  const [useEnhancement, setUseEnhancement] = useState<boolean>(false)
   const [processedImage, setProcessedImage] = useState<string | null>(null)
 
   // 初始化Tesseract工作器
@@ -80,8 +80,13 @@ const ImageRecognizer = ({
 
   // 当原图或增强选项变化时预处理图像
   useEffect(() => {
-    if (imageData && useEnhancement) {
-      ImageProcessor.preprocessImage(imageData)
+    if (imageData) {
+      preprocessImage(imageData, useEnhancement, {
+        x: 0,
+        y: 800,
+        width: 1200,
+        height: 2800
+      })
         .then(processed => {
           setProcessedImage(processed)
         })
@@ -89,8 +94,6 @@ const ImageRecognizer = ({
           console.error('图像预处理失败:', error)
           setProcessedImage(imageData) // 失败时使用原图
         })
-    } else {
-      setProcessedImage(imageData)
     }
   }, [imageData, useEnhancement])
 
@@ -116,10 +119,6 @@ const ImageRecognizer = ({
 
   // 开始识别
   const startRecognition = useCallback(async () => {
-    console.log(
-      'ImageRecognizer startRecognition processedImage',
-      processedImage
-    )
     if (!processedImage || !worker || isRecognizing) {
       return
     }
@@ -188,7 +187,7 @@ const ImageRecognizer = ({
               </Space>
             }
           >
-            <img
+            <Image
               src={processedImage}
               alt="处理后的图像"
               style={{

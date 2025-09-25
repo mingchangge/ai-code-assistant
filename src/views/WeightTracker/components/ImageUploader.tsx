@@ -82,7 +82,6 @@ const ImageUploader = ({
           <Image
             src={imageData}
             alt="体重表预览"
-            preview={false}
             style={{
               width: '100%',
               maxHeight: '300px',
