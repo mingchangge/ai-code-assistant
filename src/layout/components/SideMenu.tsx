@@ -107,6 +107,25 @@ const SideMenu = () => {
       icon: <ShoppingOutlined />,
       label: '方程可视化',
       path: '/fixed-equation-visualizer'
+    },
+    {
+      key: 'weight-tracker-page',
+      icon: <InfoCircleOutlined />,
+      label: '体重跟踪',
+      children: [
+        {
+          key: 'weight-tracker',
+          icon: <ShoppingOutlined />,
+          label: '图片识别不准-体重跟踪',
+          path: '/weight-tracker'
+        },
+        {
+          key: 'weight-records',
+          icon: <ShoppingOutlined />,
+          label: '体重记录',
+          path: '/weight-records'
+        }
+      ]
     }
   ]
 

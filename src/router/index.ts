@@ -88,6 +88,13 @@ const EquationVisualizer = wrapWithSuspense(
   () => import('@/views/FixedEquationVisualizer/index')
 )
 
+const WeightTracker = wrapWithSuspense(
+  () => import('@/views/WeightTracker/index')
+)
+const WeightRecords = wrapWithSuspense(
+  () => import('@/views/WeightRecords/index')
+)
+
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
@@ -141,6 +148,14 @@ const routes: RouteObject[] = [
       {
         path: '/fixed-equation-visualizer',
         element: createElement(EquationVisualizer)
+      },
+      {
+        path: '/weight-tracker',
+        element: createElement(WeightTracker)
+      },
+      {
+        path: '/weight-records',
+        element: createElement(WeightRecords)
       }
     ]
   },
