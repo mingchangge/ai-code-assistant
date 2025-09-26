@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom'
 import { ConfigProvider } from 'antd'
 // antd v5 默认兼容 React 16 ~ 18 版本，对于 React 19 版本，可以使用以下兼容方法进行适配，该兼容方式以及接口将在 v6 被移除。
 import '@ant-design/v5-patch-for-react-19'
+import zhCN from 'antd/locale/zh_CN'
 import useTheme from './hooks/useTheme' // 自定义主题 Hook
 import { ThemeProvider } from './contexts/ThemeProvider' // 自定义主题提供者
 import router from './router'
@@ -13,7 +14,9 @@ const AppContent = () => {
   const { themeConfig } = useTheme()
   return (
     <ConfigProvider theme={themeConfig}>
-      <RouterProvider router={router} />
+      <ConfigProvider locale={zhCN}>
+        <RouterProvider router={router} />
+      </ConfigProvider>
     </ConfigProvider>
   )
 }
