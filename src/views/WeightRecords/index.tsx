@@ -1,0 +1,411 @@
+import React, { useState, useCallback, useEffect } from 'react'
+import {
+  Card,
+  Typography,
+  message,
+  Row,
+  Col,
+  Button,
+  Space,
+  Upload,
+  Spin
+} from 'antd'
+import Tesseract from 'tesseract.js'
+import {
+  DownloadOutlined,
+  UploadOutlined,
+  ReloadOutlined
+} from '@ant-design/icons'
+import type { UploadProps } from 'antd'
+import type {
+  BodyMetrics,
+  BodyMetricsRecord,
+  TableItem
+} from './components/types'
+import {
+  addRecordToDB,
+  getAllRecordsFromDB,
+  exportRecordsToFile,
+  importRecordsFromFile
+} from '@/utils/indexedDbHandler'
+
+// 导入子组件
+import ImageUploader from './components/ImageUploader'
+import RecognitionController from './components/RecognitionController'
+import LoadingSpinner from './components/LoadingSpinner'
+import MetricsTable from './components/MetricsTable'
+import RawTextDisplay from './components/RawTextViewer'
+import SaveModal from './components/SaveModal'
+import HistoryRecords from './components/HistoryRecords'
+
+const { Title, Paragraph, Text } = Typography
+
+const ImageRecognition: React.FC = () => {
+  // 状态管理
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [ocrResult, setOcrResult] = useState<string>('')
+  const [parsedData, setParsedData] = useState<BodyMetrics | null>(null)
+  const [progress, setProgress] = useState<number>(0)
+  const [isRecognizing, setIsRecognizing] = useState<boolean>(false)
+  const [saveModalVisible, setSaveModalVisible] = useState<boolean>(false)
+  const [records, setRecords] = useState<BodyMetricsRecord[]>([])
+  const [loadingRecords, setLoadingRecords] = useState(true)
+
+  // 页面初始化：加载历史记录
+  useEffect(() => {
+    const loadRecords = async () => {
+      try {
+        setLoadingRecords(true)
+        const dbRecords = await getAllRecordsFromDB()
+        setRecords(dbRecords)
+      } catch (err) {
+        message.error('加载历史记录失败')
+        console.error('加载历史记录失败:', err)
+      } finally {
+        setLoadingRecords(false)
+      }
+    }
+    void loadRecords()
+  }, [])
+
+  // 处理图片上传
+  const handleImageChange: UploadProps['onChange'] = info => {
+    if (info.fileList.length > 0) {
+      const file = info.fileList[info.fileList.length - 1]
+      if (file.originFileObj) {
+        setSelectedImage(URL.createObjectURL(file.originFileObj))
+        setOcrResult('')
+        setParsedData(null)
+        setProgress(0)
+      }
+    }
+  }
+
+  // 刷新记录列表
+  const refreshRecords = async () => {
+    try {
+      const dbRecords = await getAllRecordsFromDB()
+      setRecords(dbRecords)
+      message.success('记录已更新')
+    } catch (err) {
+      message.error('刷新记录失败')
+      console.error('刷新记录失败:', err)
+    }
+  }
+
+  // 解析OCR识别结果
+  const parseOcrText = useCallback((text: string): BodyMetrics => {
+    const data: BodyMetrics = {
+      date: '',
+      weight: undefined,
+      bmi: undefined,
+      bodyFatRate: undefined,
+      waterRate: undefined,
+      muscleRate: undefined,
+      proteinRate: undefined,
+      visceralFatIndex: undefined,
+      subcutaneousFat: undefined,
+      leanBodyMass: undefined,
+      bodyAge: undefined,
+      basalMetabolism: undefined,
+      activeMetabolism: undefined,
+      targetWeight: undefined,
+      weightControl: undefined,
+      fatControl: undefined,
+      muscleControl: undefined,
+      bodyType: ''
+    }
+
+    // 关键字映射表
+    const keywordMap: Record<string, keyof BodyMetrics> = {
+      体重: 'weight',
+      BMl: 'bmi', // 兼容可能的OCR识别错误
+      BMI: 'bmi',
+      体脂率: 'bodyFatRate',
+      水分率: 'waterRate',
+      肌肉率: 'muscleRate',
+      骨骼肌率: 'muscleRate',
+      蛋白质率: 'proteinRate',
+      内脏脂肪指数: 'visceralFatIndex',
+      皮下脂肪: 'subcutaneousFat',
+      去脂体重: 'leanBodyMass',
+      身体年龄: 'bodyAge',
+      基础代谢: 'basalMetabolism',
+      活动代谢: 'activeMetabolism',
+      建议体重: 'targetWeight',
+      目标体重: 'targetWeight',
+      体重控制: 'weightControl',
+      脂肪控制: 'fatControl',
+      肌肉控制: 'muscleControl',
+      体型: 'bodyType'
+    }
+
+    // 提取数字
+    const matchNumber = (str: string): number | undefined => {
+      const match = str.match(/-?\d+(\.\d+)?/)
+      return match ? parseFloat(match[0]) : undefined
+    }
+
+    const lines = text.split('\n')
+
+    lines.forEach(line => {
+      const cleanLine = line.replace(/\s+/g, '')
+
+      // 提取日期
+      const dateMatch = cleanLine.match(/(\d{4})-(\d{2})-(\d{2})/)
+      if (!data.date && dateMatch) {
+        data.date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`
+      } else if (!data.date) {
+        // 尝试匹配 月/日 格式
+        const monthDayMatch = cleanLine.match(/(\d{2})月(\d{2})日/)
+        if (monthDayMatch) {
+          const year = new Date().getFullYear()
+          data.date = `${year}-${monthDayMatch[1]}-${monthDayMatch[2]}`
+        }
+      }
+
+      // 匹配关键字并提取数据
+      for (const keyword in keywordMap) {
+        if (cleanLine.startsWith(keyword)) {
+          const dataKey = keywordMap[keyword]
+          const valueStr = cleanLine.substring(keyword.length)
+
+          if (dataKey === 'bodyType') {
+            data.bodyType = valueStr.replace(/型$/, '').trim() + '型'
+          } else {
+            let value = matchNumber(valueStr)
+
+            if (value !== undefined) {
+              // 数据清洗与纠错
+              if (dataKey === 'bmi' && value > 50) {
+                value /= 10 // 处理可能的小数点识别错误
+              }
+              if (
+                (dataKey.includes('Rate') || dataKey.includes('率')) &&
+                value > 100
+              ) {
+                value /= 10 // 处理百分比可能的识别错误
+              }
+              data[dataKey] = value
+            }
+          }
+          break
+        }
+      }
+    })
+
+    return data
+  }, [])
+
+  // 处理识别操作
+  const handleRecognize = useCallback(() => {
+    if (!selectedImage) {
+      message.warning('请先上传图片')
+      return
+    }
+
+    setIsRecognizing(true)
+    setProgress(0)
+    setOcrResult('')
+    setParsedData(null)
+
+    Tesseract.recognize(selectedImage, 'chi_sim', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          setProgress(Math.floor(m.progress * 100))
+        }
+      }
+    })
+      .then(({ data: { text } }) => {
+        setOcrResult(text)
+        const parsed = parseOcrText(text)
+        setParsedData(parsed)
+        message.success('识别成功')
+      })
+      .catch((err: unknown) => {
+        console.error('识别失败:', err instanceof Error ? err.message : err)
+        message.error('识别失败，请重试')
+      })
+      .finally(() => {
+        setIsRecognizing(false)
+        setProgress(100)
+      })
+  }, [selectedImage, parseOcrText])
+
+  // 处理编辑保存
+  const handleSaveEdit = async (updatedTableData: TableItem[]) => {
+    if (!parsedData) return
+
+    // 1. 更新当前识别结果
+    const updatedData = { ...parsedData }
+    updatedTableData.forEach(item => {
+      updatedData[item.key] = item.value
+    })
+    setParsedData(updatedData)
+
+    // 2. 打开保存确认弹窗
+    setSaveModalVisible(true)
+  }
+
+  // 确认保存到数据库
+  const confirmSaveToDB = async () => {
+    if (!parsedData) return
+
+    try {
+      await addRecordToDB(parsedData)
+      // 刷新记录列表
+      await refreshRecords()
+      message.success('记录已保存')
+      setSaveModalVisible(false)
+    } catch (err) {
+      message.error('保存记录失败')
+      console.error('保存记录失败:', err)
+    }
+  }
+
+  // 处理导入文件
+  const handleImportFile = async (info: any) => {
+    if (info.file.status !== 'done') return
+
+    try {
+      const importedCount = await importRecordsFromFile(info.file.originFileObj)
+      await refreshRecords()
+      message.success(`成功导入 ${importedCount} 条记录`)
+    } catch (err) {
+      message.error('导入失败：文件格式无效')
+      console.error('导入失败:', err)
+    }
+  }
+
+  // 处理导出文件
+  const handleExportFile = async () => {
+    if (records.length === 0) {
+      message.warning('暂无记录可导出')
+      return
+    }
+    try {
+      await exportRecordsToFile()
+      message.success('导出成功')
+    } catch (err) {
+      message.error('导出失败')
+      console.error('导出失败:', err)
+    }
+  }
+
+  // 准备表格数据
+  const tableData = parsedData
+    ? Object.entries(parsedData).map(([key, value]) => ({
+        key: key as keyof BodyMetrics,
+        value
+      }))
+    : []
+
+  // 上传组件配置（用于导入）
+  const importUploadProps: UploadProps = {
+    name: 'file',
+    accept: '.json',
+    showUploadList: false,
+    beforeUpload: () => false, // 阻止自动上传
+    onChange: handleImportFile
+  }
+
+  return (
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+      <Title level={2} style={{ textAlign: 'center', marginBottom: '32px' }}>
+        体重记录
+      </Title>
+
+      {/* 历史记录表格（放在标题下方） */}
+      <div style={{ marginBottom: '32px' }}>
+        <div
+          style={{
+            marginBottom: '16px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <Title level={4} style={{ margin: 0 }}>
+            历史数据管理
+          </Title>
+          <Space size="middle">
+            <Button icon={<ReloadOutlined />} onClick={refreshRecords}>
+              刷新
+            </Button>
+            <Upload {...importUploadProps}>
+              <Button icon={<UploadOutlined />}>导入记录</Button>
+            </Upload>
+            <Button icon={<DownloadOutlined />} onClick={handleExportFile}>
+              导出记录
+            </Button>
+          </Space>
+        </div>
+
+        {loadingRecords ? (
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin size="large" />
+            <Text style={{ marginLeft: 8 }}>加载历史记录中...</Text>
+          </div>
+        ) : (
+          <HistoryRecords records={records} onRecordsChange={setRecords} />
+        )}
+      </div>
+
+      {/* 上传识别与结果展示区 */}
+      <Row gutter={[24, 24]}>
+        {/* 左侧：上传与识别区 */}
+        <Col xs={24} md={10}>
+          <Card title="上传与识别" variant="outlined">
+            <Paragraph>
+              请上传包含身体指标数据的图片（如体脂秤显示界面），系统将自动识别信息。
+            </Paragraph>
+            <ImageUploader
+              selectedImage={selectedImage}
+              onImageChange={handleImageChange}
+            />
+            <div style={{ marginTop: '24px' }}>
+              <RecognitionController
+                isRecognizing={isRecognizing}
+                progress={progress}
+                hasImage={!!selectedImage}
+                onRecognize={handleRecognize}
+              />
+            </div>
+          </Card>
+        </Col>
+
+        {/* 右侧：结果展示区 */}
+        <Col xs={24} md={14}>
+          <Card title="识别结果" variant="outlined">
+            <LoadingSpinner visible={isRecognizing} />
+
+            {parsedData && !isRecognizing && (
+              <MetricsTable tableData={tableData} onSaveEdit={handleSaveEdit} />
+            )}
+
+            {!parsedData && !isRecognizing && (
+              <div style={{ textAlign: 'center', padding: '60px 0' }}>
+                <Paragraph type="secondary">识别结果将显示在这里</Paragraph>
+              </div>
+            )}
+          </Card>
+
+          {/* 原始文本展示 */}
+          <RawTextDisplay ocrResult={ocrResult} />
+        </Col>
+      </Row>
+
+      {/* 保存弹窗 */}
+      <SaveModal
+        visible={saveModalVisible}
+        metricsData={parsedData}
+        onCancel={() => {
+          setSaveModalVisible(false)
+        }}
+        onConfirmSave={() => void confirmSaveToDB()}
+      />
+    </div>
+  )
+}
+
+export default ImageRecognition

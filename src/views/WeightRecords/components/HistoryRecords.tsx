@@ -1,0 +1,570 @@
+import React, { useState, useEffect } from 'react'
+import {
+  Card,
+  Table,
+  Button,
+  Space,
+  Modal,
+  Input,
+  InputNumber,
+  message,
+  Typography,
+  Tag,
+  Tooltip
+} from 'antd'
+import {
+  EditOutlined,
+  DeleteOutlined,
+  SaveOutlined,
+  CloseOutlined,
+  SyncOutlined
+} from '@ant-design/icons'
+import type { BodyMetricsRecord } from './types'
+import {
+  deleteRecordById,
+  updateRecord,
+  getRecordById
+} from '@/utils/indexedDbHandler'
+
+const { Text, Paragraph } = Typography
+const { Column } = Table
+
+// 所有身体指标配置（包含显示名称、单位和精度）
+const metricsConfig = [
+  { key: 'date', label: '日期', type: 'string', required: true },
+  { key: 'weight', label: '体重', type: 'number', unit: 'kg', precision: 1 },
+  { key: 'bmi', label: 'BMI', type: 'number', precision: 1 },
+  {
+    key: 'bodyFatRate',
+    label: '体脂率',
+    type: 'number',
+    unit: '%',
+    precision: 1
+  },
+  {
+    key: 'waterRate',
+    label: '水分率',
+    type: 'number',
+    unit: '%',
+    precision: 1
+  },
+  {
+    key: 'muscleRate',
+    label: '肌肉率',
+    type: 'number',
+    unit: '%',
+    precision: 1
+  },
+  {
+    key: 'skeletalMuscleRate',
+    label: '骨骼肌率',
+    type: 'number',
+    unit: '%',
+    precision: 1
+  },
+  {
+    key: 'proteinRate',
+    label: '蛋白质率',
+    type: 'number',
+    unit: '%',
+    precision: 1
+  },
+  {
+    key: 'visceralFatIndex',
+    label: '内脏脂肪指数',
+    type: 'number',
+    precision: 0
+  },
+  {
+    key: 'subcutaneousFat',
+    label: '皮下脂肪',
+    type: 'number',
+    unit: 'mm',
+    precision: 1
+  },
+  {
+    key: 'leanBodyMass',
+    label: '去脂体重',
+    type: 'number',
+    unit: 'kg',
+    precision: 1
+  },
+  {
+    key: 'bodyAge',
+    label: '身体年龄',
+    type: 'number',
+    unit: '岁',
+    precision: 0
+  },
+  {
+    key: 'basalMetabolism',
+    label: '基础代谢',
+    type: 'number',
+    unit: 'kcal',
+    precision: 0
+  },
+  {
+    key: 'activeMetabolism',
+    label: '活动代谢',
+    type: 'number',
+    unit: 'kcal',
+    precision: 0
+  },
+  {
+    key: 'targetWeight',
+    label: '目标体重',
+    type: 'number',
+    unit: 'kg',
+    precision: 1
+  },
+  { key: 'bodyType', label: '体型', type: 'string' }
+] as const
+
+interface HistoryRecordsProps {
+  records: BodyMetricsRecord[]
+  onRecordsChange: (records: BodyMetricsRecord[]) => void
+}
+
+const HistoryRecords: React.FC<HistoryRecordsProps> = ({
+  records,
+  onRecordsChange
+}) => {
+  // 状态管理
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [currentRecord, setCurrentRecord] = useState<BodyMetricsRecord | null>(
+    null
+  )
+  const [editFormData, setEditFormData] = useState<Partial<BodyMetricsRecord>>(
+    {}
+  )
+  const [isLoading, setIsLoading] = useState(false)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
+
+  // 当当前编辑记录变化时更新表单数据
+  useEffect(() => {
+    if (currentRecord) {
+      setEditFormData({ ...currentRecord })
+    }
+  }, [currentRecord])
+
+  // 打开编辑弹窗
+  const handleEdit = async (record: BodyMetricsRecord) => {
+    try {
+      setIsLoading(true)
+      const latestRecord = await getRecordById(record.id)
+      if (latestRecord) {
+        setCurrentRecord(latestRecord)
+        setEditFormData({ ...latestRecord })
+        setEditModalVisible(true)
+      } else {
+        message.error('记录不存在或已被删除')
+      }
+    } catch (err) {
+      message.error('加载记录失败')
+      console.error('加载记录失败:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 确认删除记录
+  const handleDelete = (recordId: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '此操作将永久删除该记录，删除后不可恢复',
+      okText: '确认删除',
+      cancelText: '取消',
+      okType: 'danger',
+      async onOk() {
+        try {
+          setIsLoading(true)
+          await deleteRecordById(recordId)
+          // 更新记录列表
+          const updatedRecords = records.filter(r => r.id !== recordId)
+          onRecordsChange(updatedRecords)
+          message.success('记录已删除')
+        } catch (err) {
+          message.error('删除失败，请重试')
+          console.error('删除记录失败:', err)
+        } finally {
+          setIsLoading(false)
+        }
+      }
+    })
+  }
+
+  // 处理表单数据变更
+  const handleFormChange = (key: keyof BodyMetricsRecord, value: any) => {
+    setEditFormData(prev => ({
+      ...prev,
+      [key]: value
+    }))
+  }
+
+  // 保存修改
+  const handleSaveEdit = async () => {
+    if (!currentRecord) return
+
+    // 基础验证
+    if (!editFormData.date) {
+      message.warning('请填写日期')
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      // 构建更新后的记录
+      const updatedRecord: BodyMetricsRecord = {
+        ...currentRecord,
+        ...editFormData,
+        id: currentRecord.id, // 保持ID不变
+        createdAt: currentRecord.createdAt // 保持创建时间不变
+      }
+
+      // 保存到数据库
+      const savedRecord = await updateRecord(updatedRecord)
+      if (savedRecord) {
+        // 更新列表
+        const updatedRecords = records.map(r =>
+          r.id === currentRecord.id ? savedRecord : r
+        )
+        onRecordsChange(updatedRecords)
+        setEditModalVisible(false)
+        message.success('记录已更新')
+      } else {
+        message.error('更新失败，请重试')
+      }
+    } catch (err) {
+      message.error('更新失败，请重试')
+      console.error('更新记录失败:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // 表格选择功能配置
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (keys: string[]) => {
+      setSelectedRowKeys(keys)
+    }
+  }
+
+  // 批量删除选中记录
+  const handleBatchDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先选择要删除的记录')
+      return
+    }
+
+    Modal.confirm({
+      title: '批量删除',
+      content: `确认删除选中的 ${selectedRowKeys.length.toString()} 条记录？`,
+      okText: '确认删除',
+      cancelText: '取消',
+      okType: 'danger',
+      async onOk() {
+        try {
+          setIsLoading(true)
+          // 批量删除
+          for (const id of selectedRowKeys) {
+            await deleteRecordById(id)
+          }
+          // 更新列表
+          const updatedRecords = records.filter(
+            r => !selectedRowKeys.includes(r.id)
+          )
+          onRecordsChange(updatedRecords)
+          setSelectedRowKeys([])
+          message.success(`已删除 ${selectedRowKeys.length.toString()} 条记录`)
+        } catch (err) {
+          message.error('批量删除失败')
+          console.error('批量删除失败:', err)
+        } finally {
+          setIsLoading(false)
+        }
+      }
+    })
+  }
+
+  // 清空选中状态
+  const handleClearSelection = () => {
+    setSelectedRowKeys([])
+  }
+
+  if (records.length === 0) {
+    return (
+      <Card variant="outlined">
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <Paragraph type="secondary">暂无身体指标记录</Paragraph>
+          <Text type="secondary">
+            请上传图片识别并保存记录，或导入已有记录文件
+          </Text>
+        </div>
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      {/* 批量操作工具栏 */}
+      {records.length > 0 && (
+        <div
+          style={{
+            marginBottom: 16,
+            display: 'flex',
+            justifyContent: 'flex-end'
+          }}
+        >
+          <Space size="middle">
+            <Button
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleClearSelection}
+              icon={<SyncOutlined />}
+              size="small"
+            >
+              清空选择
+            </Button>
+            <Button
+              danger
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchDelete}
+              icon={<DeleteOutlined />}
+              size="small"
+            >
+              批量删除 ({selectedRowKeys.length})
+            </Button>
+          </Space>
+        </div>
+      )}
+
+      {/* 记录表格 - 包含所有指标字段 */}
+      <Card variant="outlined">
+        <Table
+          dataSource={records}
+          rowKey="id"
+          rowSelection={{ ...rowSelection, type: 'checkbox' }}
+          pagination={{
+            pageSize: 6,
+            showSizeChanger: true,
+            pageSizeOptions: ['5', '10', '20'],
+            showTotal: total => `共 ${total.toString()} 条记录`
+          }}
+          scroll={{ x: 'max-content' }} // 横向滚动支持
+          loading={isLoading}
+          size="middle"
+        >
+          {/* 日期列 */}
+          <Column
+            title="日期"
+            dataIndex="date"
+            key="date"
+            width={120}
+            sorter={(a: BodyMetricsRecord, b: BodyMetricsRecord) =>
+              new Date(b.date).getTime() - new Date(a.date).getTime()
+            }
+          />
+
+          {/* 体重列 */}
+          <Column
+            title="体重(kg)"
+            dataIndex="weight"
+            key="weight"
+            width={100}
+            sorter={(a: BodyMetricsRecord, b: BodyMetricsRecord) =>
+              (a.weight ?? 0) - (b.weight ?? 0)
+            }
+            render={value => value ?? <Text type="secondary">--</Text>}
+          />
+
+          {/* BMI列 */}
+          <Column
+            title="BMI"
+            dataIndex="bmi"
+            key="bmi"
+            width={80}
+            sorter={(a: BodyMetricsRecord, b: BodyMetricsRecord) =>
+              (a.bmi ?? 0) - (b.bmi ?? 0)
+            }
+            render={value => value ?? <Text type="secondary">--</Text>}
+          />
+
+          {/* 体脂率列 */}
+          <Column
+            title="体脂率(%)"
+            dataIndex="bodyFatRate"
+            key="bodyFatRate"
+            width={100}
+            sorter={(a: BodyMetricsRecord, b: BodyMetricsRecord) =>
+              (a.bodyFatRate ?? 0) - (b.bodyFatRate ?? 0)
+            }
+            render={value => value ?? <Text type="secondary">--</Text>}
+          />
+
+          {/* 水分率列 */}
+          <Column
+            title="水分率(%)"
+            dataIndex="waterRate"
+            key="waterRate"
+            width={100}
+            render={value => value ?? <Text type="secondary">--</Text>}
+          />
+
+          {/* 肌肉率列 */}
+          <Column
+            title="肌肉率(%)"
+            dataIndex="muscleRate"
+            key="muscleRate"
+            width={100}
+            render={value => value ?? <Text type="secondary">--</Text>}
+          />
+
+          {/* 骨骼肌率列 */}
+          <Column
+            title="骨骼肌率(%)"
+            dataIndex="skeletalMuscleRate"
+            key="skeletalMuscleRate"
+            width={120}
+            render={value => value ?? <Text type="secondary">--</Text>}
+          />
+
+          {/* 蛋白质率列 */}
+          <Column
+            title="蛋白质率(%)"
+            dataIndex="proteinRate"
+            key="proteinRate"
+            width={110}
+            render={value => value ?? <Text type="secondary">--</Text>}
+          />
+
+          {/* 体型列 */}
+          <Column
+            title="体型"
+            dataIndex="bodyType"
+            key="bodyType"
+            width={100}
+            render={value =>
+              value ? <Tag>{value}</Tag> : <Text type="secondary">--</Text>
+            }
+          />
+
+          {/* 操作列 */}
+          <Column
+            title="操作"
+            key="action"
+            width={160}
+            render={(_, record: BodyMetricsRecord) => (
+              <Space size="small">
+                <Tooltip title="编辑记录">
+                  <Button
+                    icon={<EditOutlined />}
+                    size="small"
+                    onClick={() => void handleEdit(record)}
+                    disabled={isLoading}
+                  />
+                </Tooltip>
+                <Tooltip title="删除记录">
+                  <Button
+                    icon={<DeleteOutlined />}
+                    size="small"
+                    danger
+                    onClick={() => {
+                      handleDelete(record.id)
+                    }}
+                    disabled={isLoading}
+                  />
+                </Tooltip>
+              </Space>
+            )}
+          />
+        </Table>
+      </Card>
+
+      {/* 编辑弹窗 - 包含所有可编辑字段 */}
+      <Modal
+        title="编辑身体指标记录"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false)
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setEditModalVisible(false)
+            }}
+            icon={<CloseOutlined />}
+            disabled={isLoading}
+          >
+            取消
+          </Button>,
+          <Button
+            key="save"
+            type="primary"
+            onClick={() => void handleSaveEdit()}
+            icon={<SaveOutlined />}
+            loading={isLoading}
+          >
+            保存修改
+          </Button>
+        ]}
+        width={900}
+        destroyOnHidden
+        maskClosable={false}
+      >
+        {currentRecord && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px',
+              maxHeight: '500px',
+              overflowY: 'auto',
+              paddingRight: '8px'
+            }}
+          >
+            {metricsConfig.map(
+              ({ key, label, type, unit, precision, required }) => (
+                <div
+                  key={key}
+                  style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                >
+                  <label
+                    style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <Text strong>
+                      {label}
+                      {unit ? `(${unit})` : ''}
+                    </Text>
+                    {required && <Text type="danger">*</Text>}
+                  </label>
+
+                  {type === 'string' ? (
+                    <Input
+                      value={(editFormData[key] as string) || ''}
+                      onChange={e => handleFormChange(key, e.target.value)}
+                      placeholder={`请输入${label}`}
+                      disabled={isLoading}
+                    />
+                  ) : (
+                    <InputNumber
+                      value={editFormData[key] as number}
+                      onChange={val => handleFormChange(key, val)}
+                      placeholder={`请输入${label}`}
+                      style={{ width: '100%' }}
+                      step={0.1}
+                      precision={precision}
+                      disabled={isLoading}
+                    />
+                  )}
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </Modal>
+    </>
+  )
+}
+
+export default HistoryRecords
