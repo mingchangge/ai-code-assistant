@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Card,
   Table,
@@ -19,56 +19,60 @@ import {
   CloseOutlined,
   SyncOutlined
 } from '@ant-design/icons'
-import type { BodyMetricsRecord } from './types'
+import type { TableProps } from 'antd'
+import type { BodyMetricsRecord, metricsConfigType } from './types'
 import {
   deleteRecordById,
   updateRecord,
   getRecordById
 } from '@/utils/indexedDbHandler'
 
+type TableRowSelection<T extends object = object> =
+  TableProps<T>['rowSelection']
 const { Text, Paragraph } = Typography
 const { Column } = Table
 
 // 所有身体指标配置（包含显示名称、单位和精度）
-const metricsConfig = [
-  { key: 'date', label: '日期', type: 'string', required: true },
-  { key: 'weight', label: '体重', type: 'number', unit: 'kg', precision: 1 },
-  { key: 'bmi', label: 'BMI', type: 'number', precision: 1 },
+const metricsConfig: metricsConfigType[] = [
+  { key: 'date', label: '测量日期', type: 'string', required: true },
+  { key: 'weight', label: '体重', type: 'number', unit: 'kg', precision: 2 },
+  { key: 'bmi', label: 'BMI', type: 'number', precision: 2 },
   {
     key: 'bodyFatRate',
     label: '体脂率',
     type: 'number',
     unit: '%',
-    precision: 1
+    precision: 2
   },
   {
     key: 'waterRate',
     label: '水分率',
     type: 'number',
     unit: '%',
-    precision: 1
-  },
-  {
-    key: 'muscleRate',
-    label: '肌肉率',
-    type: 'number',
-    unit: '%',
-    precision: 1
+    precision: 2
   },
   {
     key: 'skeletalMuscleRate',
     label: '骨骼肌率',
     type: 'number',
     unit: '%',
-    precision: 1
+    precision: 2
+  },
+  {
+    key: 'boneRatio',
+    label: '骨骼率',
+    type: 'number',
+    unit: '%',
+    precision: 2
   },
   {
     key: 'proteinRate',
     label: '蛋白质率',
     type: 'number',
     unit: '%',
-    precision: 1
+    precision: 2
   },
+
   {
     key: 'visceralFatIndex',
     label: '内脏脂肪指数',
@@ -125,10 +129,7 @@ interface HistoryRecordsProps {
   onRecordsChange: (records: BodyMetricsRecord[]) => void
 }
 
-const HistoryRecords: React.FC<HistoryRecordsProps> = ({
-  records,
-  onRecordsChange
-}) => {
+const HistoryRecords = ({ records, onRecordsChange }: HistoryRecordsProps) => {
   // 状态管理
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [currentRecord, setCurrentRecord] = useState<BodyMetricsRecord | null>(
@@ -194,10 +195,15 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
   }
 
   // 处理表单数据变更
-  const handleFormChange = (key: keyof BodyMetricsRecord, value: any) => {
-    setEditFormData(prev => ({
+  const handleFormChange = (
+    key: keyof BodyMetricsRecord,
+    value: string | number | null | undefined
+  ) => {
+    // 过滤掉null值，确保不会将null传入状态
+    const sanitizedValue = value === null ? undefined : value
+    setEditFormData((prev: Partial<BodyMetricsRecord>) => ({
       ...prev,
-      [key]: value
+      [key]: sanitizedValue
     }))
   }
 
@@ -223,7 +229,7 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
 
       // 保存到数据库
       const savedRecord = await updateRecord(updatedRecord)
-      if (savedRecord) {
+      if (savedRecord.id) {
         // 更新列表
         const updatedRecords = records.map(r =>
           r.id === currentRecord.id ? savedRecord : r
@@ -243,10 +249,10 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
   }
 
   // 表格选择功能配置
-  const rowSelection = {
+  const rowSelection: TableRowSelection<BodyMetricsRecord> = {
     selectedRowKeys,
-    onChange: (keys: string[]) => {
-      setSelectedRowKeys(keys)
+    onChange: keys => {
+      setSelectedRowKeys(keys as string[])
     }
   }
 
@@ -343,7 +349,7 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
         <Table
           dataSource={records}
           rowKey="id"
-          rowSelection={{ ...rowSelection, type: 'checkbox' }}
+          rowSelection={rowSelection}
           pagination={{
             pageSize: 6,
             showSizeChanger: true,
@@ -356,7 +362,7 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
         >
           {/* 日期列 */}
           <Column
-            title="日期"
+            title="测量日期"
             dataIndex="date"
             key="date"
             width={120}
@@ -374,7 +380,9 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
             sorter={(a: BodyMetricsRecord, b: BodyMetricsRecord) =>
               (a.weight ?? 0) - (b.weight ?? 0)
             }
-            render={value => value ?? <Text type="secondary">--</Text>}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
           />
 
           {/* BMI列 */}
@@ -386,7 +394,9 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
             sorter={(a: BodyMetricsRecord, b: BodyMetricsRecord) =>
               (a.bmi ?? 0) - (b.bmi ?? 0)
             }
-            render={value => value ?? <Text type="secondary">--</Text>}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
           />
 
           {/* 体脂率列 */}
@@ -398,7 +408,9 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
             sorter={(a: BodyMetricsRecord, b: BodyMetricsRecord) =>
               (a.bodyFatRate ?? 0) - (b.bodyFatRate ?? 0)
             }
-            render={value => value ?? <Text type="secondary">--</Text>}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
           />
 
           {/* 水分率列 */}
@@ -407,36 +419,89 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
             dataIndex="waterRate"
             key="waterRate"
             width={100}
-            render={value => value ?? <Text type="secondary">--</Text>}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
           />
-
-          {/* 肌肉率列 */}
-          <Column
-            title="肌肉率(%)"
-            dataIndex="muscleRate"
-            key="muscleRate"
-            width={100}
-            render={value => value ?? <Text type="secondary">--</Text>}
-          />
-
-          {/* 骨骼肌率列 */}
           <Column
             title="骨骼肌率(%)"
             dataIndex="skeletalMuscleRate"
             key="skeletalMuscleRate"
-            width={120}
-            render={value => value ?? <Text type="secondary">--</Text>}
+            width={100}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
           />
-
+          {/* 骨骼率列 */}
+          <Column
+            title="骨骼率(%)"
+            dataIndex="boneRatio"
+            key="boneRatio"
+            width={100}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
+          />
           {/* 蛋白质率列 */}
           <Column
             title="蛋白质率(%)"
             dataIndex="proteinRate"
             key="proteinRate"
             width={110}
-            render={value => value ?? <Text type="secondary">--</Text>}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
+          />
+          {/* 肌肉率列 */}
+          <Column
+            title="肌肉率(%)"
+            dataIndex="muscleRate"
+            key="muscleRate"
+            width={100}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
           />
 
+          <Column
+            title="内脏脂肪指数"
+            dataIndex="visceralFatIndex"
+            key="visceralFatIndex"
+            width={100}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
+          />
+          {/* 去脂体重列 */}
+          <Column
+            title="去脂体重(kg)"
+            dataIndex="leanBodyMass"
+            key="leanBodyMass"
+            width={100}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
+          />
+          {/* 基础代谢列 */}
+          <Column
+            title="基础代谢"
+            dataIndex="basalMetabolism"
+            key="basalMetabolism"
+            width={100}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
+          />
+          {/* 活动代谢列 */}
+          <Column
+            title="活动代谢"
+            dataIndex="activeMetabolism"
+            key="activeMetabolism"
+            width={100}
+            render={(value: string | number | null) =>
+              value ?? <Text type="secondary">--</Text>
+            }
+          />
           {/* 体型列 */}
           <Column
             title="体型"
@@ -447,7 +512,6 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
               value ? <Tag>{value}</Tag> : <Text type="secondary">--</Text>
             }
           />
-
           {/* 操作列 */}
           <Column
             title="操作"
@@ -542,17 +606,21 @@ const HistoryRecords: React.FC<HistoryRecordsProps> = ({
                   {type === 'string' ? (
                     <Input
                       value={(editFormData[key] as string) || ''}
-                      onChange={e => handleFormChange(key, e.target.value)}
+                      onChange={e => {
+                        handleFormChange(key, e.target.value)
+                      }}
                       placeholder={`请输入${label}`}
                       disabled={isLoading}
                     />
                   ) : (
                     <InputNumber
                       value={editFormData[key] as number}
-                      onChange={val => handleFormChange(key, val)}
+                      onChange={val => {
+                        handleFormChange(key, val ?? undefined)
+                      }}
                       placeholder={`请输入${label}`}
                       style={{ width: '100%' }}
-                      step={0.1}
+                      step={0.01}
                       precision={precision}
                       disabled={isLoading}
                     />

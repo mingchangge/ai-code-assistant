@@ -1,4 +1,3 @@
-import React from 'react'
 import { Spin, Typography } from 'antd'
 import { SyncOutlined } from '@ant-design/icons'
 
@@ -8,7 +7,7 @@ interface LoadingSpinnerProps {
   visible: boolean
 }
 
-const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ visible }) => {
+const LoadingSpinner = ({ visible }: LoadingSpinnerProps) => {
   if (!visible) return null
 
   return (

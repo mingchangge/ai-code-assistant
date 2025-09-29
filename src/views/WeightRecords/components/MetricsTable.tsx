@@ -16,13 +16,15 @@ const MetricsTable = ({ tableData, onSaveEdit }: MetricsTableProps) => {
 
   // 指标名称映射（用于表格显示）
   const labelMap: Record<TableItem['key'], string> = {
-    date: '日期',
+    date: '测量日期',
     weight: '体重',
     bmi: 'BMI',
     bodyFatRate: '体脂率',
     waterRate: '水分率',
-    muscleRate: '肌肉率',
+    skeletalMuscleRate: '骨骼肌率',
+    boneRatio: '骨骼率',
     proteinRate: '蛋白质率',
+    muscleRate: '肌肉率',
     visceralFatIndex: '内脏脂肪指数',
     subcutaneousFat: '皮下脂肪',
     leanBodyMass: '去脂体重',
@@ -78,8 +80,8 @@ const MetricsTable = ({ tableData, onSaveEdit }: MetricsTableProps) => {
             }}
             style={{ width: '100%' }}
             placeholder="请输入数值"
-            step={0.1}
-            precision={1}
+            step={0.01}
+            precision={2}
           />
         )
       }

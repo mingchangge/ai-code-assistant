@@ -33,7 +33,6 @@ const RecognitionController = ({
         <Progress
           percent={progress}
           status={progress === 100 ? 'success' : 'active'}
-          strokeWidth={8}
         />
       )}
     </Space>

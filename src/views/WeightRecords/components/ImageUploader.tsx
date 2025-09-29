@@ -1,4 +1,4 @@
-import { Upload, Button, Divider, Space } from 'antd'
+import { Upload, Button, Divider, Space, Image } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import type { UploadProps } from 'antd'
 
@@ -35,7 +35,7 @@ const ImageUploader = ({
           <>
             <Divider orientation="left">图片预览</Divider>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <img
+              <Image
                 src={selectedImage}
                 alt="身体指标预览"
                 style={{

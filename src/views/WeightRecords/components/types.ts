@@ -6,6 +6,8 @@ export interface BodyMetrics {
   bodyFatRate: number | undefined
   waterRate: number | undefined
   muscleRate: number | undefined
+  skeletalMuscleRate: number | undefined
+  boneRatio: number | undefined
   proteinRate: number | undefined
   visceralFatIndex: number | undefined
   subcutaneousFat: number | undefined
@@ -18,8 +20,17 @@ export interface BodyMetrics {
   fatControl: number | undefined
   muscleControl: number | undefined
   bodyType: string
+  // 添加索引签名，允许动态访问属性
+  [key: string]: string | number | undefined
 }
-
+export interface metricsConfigType {
+  key: keyof BodyMetrics
+  label: string
+  type: 'string' | 'number'
+  required?: boolean
+  unit?: string
+  precision?: number
+}
 /** 单条身体指标记录（含元数据） */
 export interface BodyMetricsRecord extends BodyMetrics {
   id: string // 唯一标识（UUID）

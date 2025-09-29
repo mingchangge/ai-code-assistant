@@ -23,7 +23,6 @@ const RawTextDisplay = ({ ocrResult }: RawTextDisplayProps) => {
     >
       <Text
         style={{
-          backgroundColor: '#f5f5f5',
           padding: '16px',
           maxHeight: '300px',
           overflow: 'auto',

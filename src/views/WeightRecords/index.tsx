@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import {
   Card,
   Typography,
@@ -40,7 +40,7 @@ import HistoryRecords from './components/HistoryRecords'
 
 const { Title, Paragraph, Text } = Typography
 
-const ImageRecognition: React.FC = () => {
+const ImageRecognition = () => {
   // 状态管理
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [ocrResult, setOcrResult] = useState<string>('')
@@ -101,8 +101,10 @@ const ImageRecognition: React.FC = () => {
       bmi: undefined,
       bodyFatRate: undefined,
       waterRate: undefined,
-      muscleRate: undefined,
+      skeletalMuscleRate: undefined,
+      boneRatio: undefined,
       proteinRate: undefined,
+      muscleRate: undefined,
       visceralFatIndex: undefined,
       subcutaneousFat: undefined,
       leanBodyMass: undefined,
@@ -123,9 +125,10 @@ const ImageRecognition: React.FC = () => {
       BMI: 'bmi',
       体脂率: 'bodyFatRate',
       水分率: 'waterRate',
-      肌肉率: 'muscleRate',
-      骨骼肌率: 'muscleRate',
+      骨骼肌率: 'skeletalMuscleRate',
+      骨骼率: 'boneRatio',
       蛋白质率: 'proteinRate',
+      肌肉率: 'muscleRate',
       内脏脂肪指数: 'visceralFatIndex',
       皮下脂肪: 'subcutaneousFat',
       去脂体重: 'leanBodyMass',
@@ -142,8 +145,8 @@ const ImageRecognition: React.FC = () => {
 
     // 提取数字
     const matchNumber = (str: string): number | undefined => {
-      const match = str.match(/-?\d+(\.\d+)?/)
-      return match ? parseFloat(match[0]) : undefined
+      const cleanStr = /[^\d-]/g.exec(str)
+      return cleanStr ? parseFloat(cleanStr[0]) : undefined
     }
 
     const lines = text.split('\n')
@@ -152,15 +155,15 @@ const ImageRecognition: React.FC = () => {
       const cleanLine = line.replace(/\s+/g, '')
 
       // 提取日期
-      const dateMatch = cleanLine.match(/(\d{4})-(\d{2})-(\d{2})/)
+      const dateMatch = /(\d{4})-(\d{2})-(\d{2})/.exec(cleanLine)
       if (!data.date && dateMatch) {
         data.date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`
       } else if (!data.date) {
         // 尝试匹配 月/日 格式
-        const monthDayMatch = cleanLine.match(/(\d{2})月(\d{2})日/)
+        const monthDayMatch = /(\d{2})月(\d{2})日/.exec(cleanLine)
         if (monthDayMatch) {
           const year = new Date().getFullYear()
-          data.date = `${year}-${monthDayMatch[1]}-${monthDayMatch[2]}`
+          data.date = `${year.toString()}-${monthDayMatch[1]}-${monthDayMatch[2]}`
         }
       }
 
@@ -210,6 +213,10 @@ const ImageRecognition: React.FC = () => {
     setParsedData(null)
 
     Tesseract.recognize(selectedImage, 'chi_sim', {
+      tessedit_char_whitelist:
+        '0123456789. %公斤年龄脂肪BMI体脂率水分率骨骼肌率骨骼率蛋白质率肌肉率内脏脂肪指数皮下脂肪去脂体重体型基础代谢活动代谢目标体重体重控制脂肪控制肌肉控制',
+      psm: 6,
+      oem: 3,
       logger: m => {
         if (m.status === 'recognizing text') {
           setProgress(Math.floor(m.progress * 100))
@@ -233,7 +240,7 @@ const ImageRecognition: React.FC = () => {
   }, [selectedImage, parseOcrText])
 
   // 处理编辑保存
-  const handleSaveEdit = async (updatedTableData: TableItem[]) => {
+  const handleSaveEdit = (updatedTableData: TableItem[]) => {
     if (!parsedData) return
 
     // 1. 更新当前识别结果
@@ -264,13 +271,13 @@ const ImageRecognition: React.FC = () => {
   }
 
   // 处理导入文件
-  const handleImportFile = async (info: any) => {
+  const handleImportFile = async info => {
     if (info.file.status !== 'done') return
 
     try {
       const importedCount = await importRecordsFromFile(info.file.originFileObj)
       await refreshRecords()
-      message.success(`成功导入 ${importedCount} 条记录`)
+      message.success(`成功导入 ${importedCount.toString()} 条记录`)
     } catch (err) {
       message.error('导入失败：文件格式无效')
       console.error('导入失败:', err)
@@ -306,11 +313,19 @@ const ImageRecognition: React.FC = () => {
     accept: '.json',
     showUploadList: false,
     beforeUpload: () => false, // 阻止自动上传
-    onChange: handleImportFile
+    onChange: void handleImportFile
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        margin: '0 auto',
+        padding: '24px',
+        overflowY: 'auto'
+      }}
+    >
       <Title level={2} style={{ textAlign: 'center', marginBottom: '32px' }}>
         体重记录
       </Title>
@@ -329,13 +344,13 @@ const ImageRecognition: React.FC = () => {
             历史数据管理
           </Title>
           <Space size="middle">
-            <Button icon={<ReloadOutlined />} onClick={refreshRecords}>
+            <Button icon={<ReloadOutlined />} onClick={void refreshRecords}>
               刷新
             </Button>
             <Upload {...importUploadProps}>
               <Button icon={<UploadOutlined />}>导入记录</Button>
             </Upload>
-            <Button icon={<DownloadOutlined />} onClick={handleExportFile}>
+            <Button icon={<DownloadOutlined />} onClick={void handleExportFile}>
               导出记录
             </Button>
           </Space>
