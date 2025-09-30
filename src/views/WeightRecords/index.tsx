@@ -38,6 +38,7 @@ import RawTextDisplay from './components/RawTextViewer'
 import SaveModal from './components/SaveModal'
 import HistoryRecords from './components/HistoryRecords'
 
+type UploadChangeParam = Parameters<NonNullable<UploadProps['onChange']>>[0]
 const { Title, Paragraph, Text } = Typography
 
 const ImageRecognition = () => {
@@ -145,8 +146,24 @@ const ImageRecognition = () => {
 
     // 提取数字
     const matchNumber = (str: string): number | undefined => {
-      const cleanStr = /[^\d-]/g.exec(str)
-      return cleanStr ? parseFloat(cleanStr[0]) : undefined
+      // 预处理：去除所有空格和非数字相关的特殊字符
+      const cleaned = str.replace(/[^\d.-]/g, '')
+      // 处理可能的多个小数点（只保留第一个）
+      const dotIndex = cleaned.indexOf('.')
+      const normalized =
+        dotIndex !== -1
+          ? cleaned.substring(0, dotIndex + 1) +
+            cleaned.substring(dotIndex + 1).replace(/\./g, '')
+          : cleaned
+
+      const regex = /-?\d+(\.\d+)?/
+      const match = regex.exec(normalized)
+
+      if (match) {
+        const num = parseFloat(match[0])
+        return isNaN(num) ? undefined : num
+      }
+      return undefined
     }
 
     const lines = text.split('\n')
@@ -184,7 +201,8 @@ const ImageRecognition = () => {
                 value /= 10 // 处理可能的小数点识别错误
               }
               if (
-                (dataKey.includes('Rate') || dataKey.includes('率')) &&
+                (String(dataKey).includes('Rate') ||
+                  String(dataKey).includes('率')) &&
                 value > 100
               ) {
                 value /= 10 // 处理百分比可能的识别错误
@@ -196,7 +214,7 @@ const ImageRecognition = () => {
         }
       }
     })
-
+    console.log('data', data)
     return data
   }, [])
 
@@ -213,10 +231,6 @@ const ImageRecognition = () => {
     setParsedData(null)
 
     Tesseract.recognize(selectedImage, 'chi_sim', {
-      tessedit_char_whitelist:
-        '0123456789. %公斤年龄脂肪BMI体脂率水分率骨骼肌率骨骼率蛋白质率肌肉率内脏脂肪指数皮下脂肪去脂体重体型基础代谢活动代谢目标体重体重控制脂肪控制肌肉控制',
-      psm: 6,
-      oem: 3,
       logger: m => {
         if (m.status === 'recognizing text') {
           setProgress(Math.floor(m.progress * 100))
@@ -271,8 +285,8 @@ const ImageRecognition = () => {
   }
 
   // 处理导入文件
-  const handleImportFile = async info => {
-    if (info.file.status !== 'done') return
+  const handleImportFile = async (info: UploadChangeParam) => {
+    if (info.file.status !== 'done' || !info.file.originFileObj) return
 
     try {
       const importedCount = await importRecordsFromFile(info.file.originFileObj)
@@ -290,6 +304,7 @@ const ImageRecognition = () => {
       message.warning('暂无记录可导出')
       return
     }
+    console.log('records', records, 'daochu')
     try {
       await exportRecordsToFile()
       message.success('导出成功')
@@ -298,7 +313,6 @@ const ImageRecognition = () => {
       console.error('导出失败:', err)
     }
   }
-
   // 准备表格数据
   const tableData = parsedData
     ? Object.entries(parsedData).map(([key, value]) => ({
@@ -306,7 +320,6 @@ const ImageRecognition = () => {
         value
       }))
     : []
-
   // 上传组件配置（用于导入）
   const importUploadProps: UploadProps = {
     name: 'file',
@@ -344,14 +357,20 @@ const ImageRecognition = () => {
             历史数据管理
           </Title>
           <Space size="middle">
-            <Button icon={<ReloadOutlined />} onClick={void refreshRecords}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => void refreshRecords()}
+            >
               刷新
             </Button>
             <Upload {...importUploadProps}>
-              <Button icon={<UploadOutlined />}>导入记录</Button>
+              <Button icon={<UploadOutlined />}>导入</Button>
             </Upload>
-            <Button icon={<DownloadOutlined />} onClick={void handleExportFile}>
-              导出记录
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={() => void handleExportFile()}
+            >
+              导出
             </Button>
           </Space>
         </div>

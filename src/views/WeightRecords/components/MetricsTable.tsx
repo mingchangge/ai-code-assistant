@@ -13,7 +13,6 @@ interface MetricsTableProps {
 const MetricsTable = ({ tableData, onSaveEdit }: MetricsTableProps) => {
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<TableItem[]>([...tableData])
-
   // 指标名称映射（用于表格显示）
   const labelMap: Record<TableItem['key'], string> = {
     date: '测量日期',

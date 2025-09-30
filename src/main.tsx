@@ -15,7 +15,11 @@ async function initEsbuild() {
 
 // 调用初始化函数
 void initEsbuild().then(() => {
-  createRoot(document.getElementById('root')!).render(
+  const rootDom = document.getElementById('root')
+  if (!rootDom) {
+    throw new Error('rootDom 不存在')
+  }
+  createRoot(rootDom).render(
     <StrictMode>
       <App />
     </StrictMode>
