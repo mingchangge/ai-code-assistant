@@ -1,8 +1,15 @@
 import { useState } from 'react'
 import styled from 'styled-components'
+import Profile, {
+  Profile2,
+  Profile3,
+  Profile4,
+  Profile5
+} from './components/Profile'
 import MyComponent from './components/MyComponent'
 import MyButton from './components/MyButton'
 import MyButtonShared from './components/MyButton2'
+import TimeChange from './components/TimeChange'
 
 const products = [
   { title: 'Cabbage', id: 1 },
@@ -16,6 +23,11 @@ const ReactWrapper = styled.div`
   padding: 20px;
   height: 100%;
   overflow-y: auto;
+  position: relative;
+  .avatar {
+    border: 0px solid #ccc;
+    border-radius: 100%;
+  }
   .grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -31,17 +43,104 @@ const ReactWrapper = styled.div`
       }
     }
   }
+  .grid2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 4px !important;
+    div {
+      padding: 0px;
+      h3 {
+        font-size: 20px;
+      }
+      p {
+        font-size: 16px;
+      }
+    }
+  }
+  .card2 {
+    width: 120px;
+    height: 120px;
+    border: 1px solid #ccc;
+    border-radius: 14px;
+    text-align: center !important;
+    p {
+      margin: 10px auto;
+    }
+  }
 `
 function ReactBasics() {
   const [count, setCount] = useState(0)
   const handleClick = () => {
     setCount(count + 1)
   }
+  const imgProps = {
+    person: {
+      name: '随机图片 4',
+      imageSrc: 'https://picsum.photos/400/225?random=4'
+    },
+    size: 100,
+    isSepia: true,
+    thickBorder: false
+  }
+  const user = {
+    profile: { name: '张三', age: 30 },
+    address: { city: '北京' }
+  }
+  const {
+    profile: { name: userName, age: userAge },
+    address: { city: userCity }
+  } = user
+  console.log(userName, userAge, userCity)
   return (
     <ReactWrapper>
       <h1>React Basics</h1>
+
       <MyComponent />
       <div className="grid">
+        <div>
+          <h2>将 Props 传递给组件-Avatar解构传入</h2>
+          <Profile />
+        </div>
+        <div>
+          <h2>将 Props 传递给组件-props作为一整个对象传入</h2>
+          <Profile2 />
+        </div>
+        <div>
+          <h2>不使用 JSX 展开语法传递 props-父组件挨个传递子组件属性 </h2>
+          <Profile3
+            person={{
+              name: '随机图片 3',
+              imageSrc: 'https://picsum.photos/400/225?random=3'
+            }}
+            size={100}
+            isSepia={true}
+            thickBorder={true}
+          />
+        </div>
+        <div>
+          <h2>使用 JSX 展开语法传递 props-解构父组件对象属性 </h2>
+          <div className="grid2">
+            <div>
+              <Profile4 {...imgProps} />
+            </div>
+            <div>
+              {' '}
+              <h3>css sepia() </h3>
+              <p>
+                该CSS函数将输入图像转换为棕褐色，使其呈现更温暖、更偏黄/棕色的外观。如：sepia(0.65)
+              </p>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h2>将 JSX 作为子组件传递 </h2>
+          <Profile5 />
+        </div>
+        <div>
+          <h2>Props 随时间变化 </h2>
+          <TimeChange />
+        </div>
         <div>
           <h2>Products列表渲染</h2>
           <ul>
