@@ -93,7 +93,7 @@ const SideMenu = () => {
     {
       key: 'react-basics',
       icon: <ShoppingOutlined />,
-      label: 'React Basics',
+      label: 'React 基础',
       path: '/react-basics'
     },
     {

@@ -83,15 +83,6 @@ function ReactBasics() {
     isSepia: true,
     thickBorder: false
   }
-  const user = {
-    profile: { name: '张三', age: 30 },
-    address: { city: '北京' }
-  }
-  const {
-    profile: { name: userName, age: userAge },
-    address: { city: userCity }
-  } = user
-  console.log(userName, userAge, userCity)
   return (
     <ReactWrapper>
       <h1>React Basics</h1>
