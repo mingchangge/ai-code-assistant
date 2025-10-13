@@ -58,7 +58,7 @@ const wrapWithSuspense = <T = DefaultProps>(
 
 // 路由懒加载
 const MainLayout = wrapWithSuspense(() => import('@/layout/MainLayout'))
-const Home = wrapWithSuspense(() => import('@/views/home/index'))
+const Home = wrapWithSuspense(() => import('@/views/Home/index'))
 
 const MonacoEsbuildWasm = wrapWithSuspense(
   () => import('@/views/MonacoEsbuildWasm/index')

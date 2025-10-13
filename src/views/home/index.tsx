@@ -1,5 +1,5 @@
 import styled from 'styled-components'
-import MdTabs from './components/MdTabs'
+import MdTabs from '@/components/MarkDownReader/MdTabs'
 import '@/utils/jsStudy'
 // 样式
 const StyledReaderBox = styled.div`
