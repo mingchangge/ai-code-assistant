@@ -28,6 +28,12 @@ const SideMenu = () => {
       path: '/'
     },
     {
+      key: 'js-new-features',
+      icon: <ShoppingOutlined />,
+      label: 'JavaScript 新特性',
+      path: '/js-new-features'
+    },
+    {
       key: 'ai-code-generator',
       icon: <InfoCircleOutlined />,
       label: 'AI代码生成',
@@ -95,12 +101,6 @@ const SideMenu = () => {
       icon: <ShoppingOutlined />,
       label: 'React 基础',
       path: '/react-basics'
-    },
-    {
-      key: 'js-new-features',
-      icon: <ShoppingOutlined />,
-      label: 'JavaScript 新特性',
-      path: '/js-new-features'
     },
     {
       key: 'fixed-equation-visualizer',

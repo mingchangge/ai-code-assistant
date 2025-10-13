@@ -1,18 +1,34 @@
-import configData1 from './config-data.json' with { type: 'json' }
-
-const configData2 = await import('./config-data.json', {
-  assert: { type: 'json' }
-})
+import styled from 'styled-components'
+import MdTabs from '@/components/MarkDownReader/MdTabs'
+import './js-new-features/es6.js'
+// 样式
+const StyledReaderBox = styled.div`
+  width: 100%;
+  height: calc(100vh - 168px);
+  overflow: hidden;
+  .ant-tabs-content-holder {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .reader-box {
+    width: 100%;
+    height: 100%;
+  }
+`
 
 function JsNewFeature() {
-  //   const arr = [1, 2, 3, 4, 5]
-  //   assert.ok(arr.at(-1) === 5)
+  const customMdTabs = import.meta.glob<string>(
+    '@/assets/docs/js-new-features/*.md',
+    {
+      query: '?url',
+      import: 'default',
+      eager: true
+    }
+  )
   return (
-    <div>
-      <h1>JavaScript 新特性</h1>
-      <pre>{JSON.stringify(configData1, null, 2)}</pre>
-      <pre>{JSON.stringify(configData2.default, null, 2)}</pre>
-    </div>
+    <StyledReaderBox>
+      <MdTabs mdMap={customMdTabs} docsPath="/docs/js-new-features/" />
+    </StyledReaderBox>
   )
 }
 
