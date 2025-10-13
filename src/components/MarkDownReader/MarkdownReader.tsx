@@ -4,7 +4,9 @@ import styled from 'styled-components'
 import TableOfContents from './TableOfContents'
 import 'github-markdown-css/github-markdown.css'
 
-const Container = styled.div`
+const Container = styled.div.withConfig({
+  shouldForwardProp: prop => !['isTocExpanded'].includes(prop)
+})<{ isTocExpanded: boolean }>`
   display: flex;
   width: 100%;
   height: 100%;
@@ -13,7 +15,8 @@ const Container = styled.div`
   .article-container {
     flex: 1;
     max-width: 100%;
-    padding-right: 320px; /* 为目录留出空间 */
+    padding-right: ${props =>
+      props.isTocExpanded ? '320px' : '0'}; /* 根据目录展开状态动态调整 */
 
     @media (max-width: 1200px) {
       padding-right: 0;
@@ -146,6 +149,7 @@ const MarkdownReader = ({
   showToc = true
 }: Props) => {
   const [html, setHtml] = useState<string>('')
+  const [isTocExpanded, setIsTocExpanded] = useState<boolean>(false) // 添加目录展开状态
 
   const load = useCallback(async () => {
     try {
@@ -171,8 +175,12 @@ const MarkdownReader = ({
     console.log(`跳转到章节: ${id}`)
   }
 
+  // 处理目录展开状态变化
+  const handleTocToggle = (expanded: boolean) => {
+    setIsTocExpanded(expanded)
+  }
   return (
-    <Container>
+    <Container isTocExpanded={isTocExpanded}>
       <div className="article-container">
         <StyledArticle
           className="markdown-body"
@@ -182,7 +190,11 @@ const MarkdownReader = ({
 
       {/* 条件渲染目录组件 */}
       {showToc && html && (
-        <TableOfContents html={html} onItemClick={handleTocItemClick} />
+        <TableOfContents
+          html={html}
+          onItemClick={handleTocItemClick}
+          onToggle={handleTocToggle}
+        />
       )}
     </Container>
   )

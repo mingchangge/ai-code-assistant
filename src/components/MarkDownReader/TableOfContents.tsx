@@ -12,6 +12,7 @@ interface TocItem {
 interface TableOfContentsProps {
   html: string
   onItemClick?: (id: string) => void
+  onToggle?: (expanded: boolean) => void
   className?: string
 }
 
@@ -261,6 +262,7 @@ const generateStableId = (text: string, index: number): string => {
 const TableOfContents = ({
   html,
   onItemClick,
+  onToggle,
   className = ''
 }: TableOfContentsProps) => {
   const [tocItems, setTocItems] = useState<TocItem[]>([])
@@ -272,7 +274,13 @@ const TableOfContents = ({
 
   // 处理目录展开/收起
   const handleToggle = () => {
-    setIsExpanded(!isExpanded)
+    const newExpandedState = !isExpanded
+    setIsExpanded(newExpandedState)
+
+    // 调用onToggle回调，通知父组件目录状态变化
+    if (onToggle) {
+      onToggle(newExpandedState)
+    }
   }
 
   // 从HTML中提取标题 - 修复重复key问题
