@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import styled, { keyframes } from 'styled-components'
 
 // 目录项接口
@@ -35,7 +35,7 @@ const collapseAnimation = keyframes`
   from {
     opacity: 1;
     transform: translateX(0);
-        max-height: calc(100vh - 140px);
+    max-height: calc(100vh - 140px);
   }
   to {
     opacity: 0;
@@ -111,7 +111,6 @@ const TocIcon = styled.div.withConfig({
 `
 
 // 目录容器样式
-// 目录容器样式 - 修改为固定高度，内部可滚动
 const TocContainer = styled.div.withConfig({
   shouldForwardProp: prop => !['isExpanded'].includes(prop)
 })<{ isExpanded: boolean }>`
@@ -153,7 +152,7 @@ const TocContainer = styled.div.withConfig({
   }
 `
 
-// 目录标题容器样式 - 固定不滚动
+// 目录标题容器样式
 const TocHeader = styled.div.withConfig({
   shouldForwardProp: prop => !['isExpanded'].includes(prop)
 })<{ isExpanded: boolean }>`
@@ -166,7 +165,7 @@ const TocHeader = styled.div.withConfig({
   transition: opacity 0.3s ease;
 `
 
-// 目录标题样式 - 固定标题
+// 目录标题样式
 const TocTitle = styled.h3`
   height: 32px;
   line-height: 32px;
@@ -177,7 +176,7 @@ const TocTitle = styled.h3`
   padding-bottom: 8px;
 `
 
-// 目录内容容器样式 - 可滚动区域
+// 目录内容容器样式
 const TocContent = styled.div.withConfig({
   shouldForwardProp: prop => !['isExpanded'].includes(prop)
 })<{ isExpanded: boolean }>`
@@ -209,7 +208,7 @@ const TocContent = styled.div.withConfig({
   }
 `
 
-// 目录项样式 - 修复isActive属性传递问题
+// 目录项样式
 const TocItemStyled = styled.div.withConfig({
   shouldForwardProp: prop => !['level', 'isActive', 'isExpanded'].includes(prop)
 })<{ level: number; isActive: boolean; isExpanded: boolean }>`
@@ -236,27 +235,26 @@ const TocItemStyled = styled.div.withConfig({
 `
 
 /**
- * 生成稳定的标题ID - 修复重复key问题
+ * 生成稳定的标题ID
  * @param text - 标题文本
  * @param index - 标题索引
  * @returns 稳定的ID字符串
  */
 const generateStableId = (text: string, index: number): string => {
-  // 使用文本内容生成slug，确保ID稳定且唯一
   const slug = text
     .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]/g, '-') // 保留中文和字母数字
-    .replace(/-+/g, '-') // 合并多个连字符
-    .replace(/^-|-$/g, '') // 去除首尾连字符
+    .replace(/[^a-z0-9\u4e00-\u9fa5]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
 
-  // 添加索引确保唯一性，避免重复key问题
   return `heading-${slug}-${index.toString()}`
 }
 
 /**
- * 目录组件 - 自动提取Markdown文档中的标题并生成可点击的目录
+ * 目录组件 - 修复点击跳转和ID设置问题
  * @param html - 渲染后的HTML内容
  * @param onItemClick - 点击目录项的回调函数
+ * @param onToggle - 目录展开状态变化的回调函数
  * @param className - 自定义样式类名
  */
 const TableOfContents = ({
@@ -267,23 +265,22 @@ const TableOfContents = ({
 }: TableOfContentsProps) => {
   const [tocItems, setTocItems] = useState<TocItem[]>([])
   const [activeId, setActiveId] = useState<string>('')
-  const [isExpanded, setIsExpanded] = useState<boolean>(false) // 控制目录展开状态
+  const [isExpanded, setIsExpanded] = useState<boolean>(false)
   const articleRef = useRef<HTMLElement | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const mutationObserverRef = useRef<MutationObserver | null>(null)
+  const scrollContainerRef = useRef<Element | null>(null)
 
   // 处理目录展开/收起
-  const handleToggle = () => {
+  const handleToggle = useCallback(() => {
     const newExpandedState = !isExpanded
     setIsExpanded(newExpandedState)
-
-    // 调用onToggle回调，通知父组件目录状态变化
     if (onToggle) {
       onToggle(newExpandedState)
     }
-  }
+  }, [isExpanded, onToggle])
 
-  // 从HTML中提取标题 - 修复重复key问题
+  // 从HTML中提取标题
   useEffect(() => {
     if (!html) return
 
@@ -294,8 +291,6 @@ const TableOfContents = ({
     const items: TocItem[] = Array.from(headings).map((heading, index) => {
       const level = parseInt(heading.tagName.substring(1))
       const text = heading.textContent ?? `标题 ${(index + 1).toString()}`
-
-      // 生成稳定的ID，确保唯一性
       const id = generateStableId(text, index)
 
       return { id, text, level }
@@ -303,107 +298,168 @@ const TableOfContents = ({
 
     setTocItems(items)
   }, [html])
+  // 查找真正的滚动容器 - 递归向上查找具有overflow: auto/scroll的祖先
+  const findScrollContainer = (element: Element): Element | null => {
+    let current = element.parentElement
 
-  // 设置IntersectionObserver来监听标题可见性 - 修复isActive样式问题
+    while (current) {
+      const style = window.getComputedStyle(current)
+      if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+        return current
+      }
+      current = current.parentElement
+    }
+
+    // 如果没有找到，返回document.documentElement
+    return document.documentElement
+  }
+  // 设置标题ID并监听DOM变化 - 核心修复
   useEffect(() => {
     if (tocItems.length === 0) return
 
-    // 清理之前的定时器
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
+    // 查找文章容器
+    articleRef.current = document.querySelector('.article-container')
+    if (!articleRef.current) {
+      console.warn('未找到文章容器')
+      return
+    }
+    // 找到真正的滚动容器
+    const scrollContainer = findScrollContainer(articleRef.current)
+    scrollContainerRef.current = scrollContainer
+    console.log('滚动容器:', scrollContainer)
+
+    // 清理之前的观察器
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+    }
+    if (mutationObserverRef.current) {
+      mutationObserverRef.current.disconnect()
     }
 
-    // 使用延时确保DOM已经渲染完成
-    timeoutRef.current = setTimeout(() => {
-      // 查找文章容器
-      articleRef.current = document.querySelector('.article-container')
-      if (!articleRef.current) {
-        console.warn('未找到文章容器')
-        return
-      }
-
-      // 清理之前的观察器
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-      }
-
-      // 创建新的观察器 - 修复IntersectionObserver配置
-      observerRef.current = new IntersectionObserver(
-        entries => {
-          // 找到最接近顶部的可见标题
-          let closestHeading: Element | null = null
-          let minDistance = Infinity
-
-          for (const entry of entries) {
-            if (entry.isIntersecting) {
-              const rect = entry.target.getBoundingClientRect()
-              const distance = Math.abs(rect.top)
-
-              if (distance < minDistance) {
-                minDistance = distance
-                closestHeading = entry.target
-              }
-            }
-          }
-
-          if (closestHeading) {
-            setActiveId(closestHeading.id)
-          }
-        },
-        {
-          root: articleRef.current,
-          rootMargin: '-50px 0px -50% 0px', // 优化可见区域
-          threshold: [0, 0.25, 0.5, 0.75, 1] // 多个阈值提高精度
-        }
-      )
-
-      // 观察所有标题元素
-      const articleHeadings = articleRef.current.querySelectorAll(
+    // 设置标题ID的函数
+    const setupHeadingIds = () => {
+      const articleHeadings = articleRef.current?.querySelectorAll(
         'h1, h2, h3, h4, h5, h6'
       )
+      if (!articleHeadings) return
 
-      // 设置标题ID并观察
       articleHeadings.forEach((heading, index) => {
         if (index < tocItems.length) {
-          // 确保ID设置正确
+          // 确保每个标题都有正确的ID
           heading.id = tocItems[index].id
-          observerRef.current?.observe(heading)
         }
       })
-    }, 200) // 增加延时确保DOM完全渲染
+    }
+
+    // 立即设置ID
+    setupHeadingIds()
+
+    // 创建MutationObserver监听DOM变化
+    mutationObserverRef.current = new MutationObserver(() => {
+      setupHeadingIds()
+    })
+
+    // 观察文章容器内的变化
+    mutationObserverRef.current.observe(articleRef.current, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    })
+
+    // 创建IntersectionObserver监听标题可见性
+    observerRef.current = new IntersectionObserver(
+      entries => {
+        let closestHeading: Element | null = null
+        let minDistance = Infinity
+
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const rect = entry.target.getBoundingClientRect()
+            const distance = Math.abs(rect.top - 100) // 考虑固定导航栏高度
+
+            if (distance < minDistance) {
+              minDistance = distance
+              closestHeading = entry.target
+            }
+          }
+        }
+
+        if (closestHeading) {
+          setActiveId(closestHeading.id)
+        }
+      },
+      {
+        root: articleRef.current,
+        rootMargin: '-100px 0px -50% 0px', // 考虑固定导航栏
+        threshold: [0, 0.1, 0.5, 0.9, 1]
+      }
+    )
+
+    // 观察所有标题元素
+    const articleHeadings = articleRef.current.querySelectorAll(
+      'h1, h2, h3, h4, h5, h6'
+    )
+    articleHeadings.forEach(heading => {
+      observerRef.current?.observe(heading)
+    })
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
       if (observerRef.current) {
         observerRef.current.disconnect()
+      }
+      if (mutationObserverRef.current) {
+        mutationObserverRef.current.disconnect()
       }
     }
   }, [tocItems])
 
-  // 处理目录项点击 - 修复滚动误差
-  const handleItemClick = (id: string) => {
-    console.log('点击目录项:', id)
-    // 首先尝试在文章容器内查找
-    const articleContainer = document.querySelector('.article-container')
+  // 处理目录项点击 - 修复滚动定位
+  const handleItemClick = useCallback(
+    (id: string) => {
+      if (!articleRef.current) return
 
-    if (!articleContainer) {
-      console.warn('未找到文章容器')
-      return
-    }
+      // 在文章容器内查找目标元素
+      const element = articleRef.current.querySelector(`#${id}`)
+      if (!element) {
+        console.warn('未找到目标元素:', id)
+        return
+      }
+      // 如果没有滚动容器，直接返回
+      if (!scrollContainerRef.current) {
+        console.warn('未找到滚动容器')
+        return
+      }
 
-    // 在文章容器内查找目标元素
-    const element = articleContainer.querySelector(`#${id}`)
-    if (element) {
-      console.log('找到目标元素:', element)
+      // 计算精确滚动位置 - 考虑固定导航栏高度
+      const headerOffset = 120 // 固定导航栏高度 + 额外间距
+      const elementRect = element.getBoundingClientRect()
+      const containerRect = scrollContainerRef.current.getBoundingClientRect()
 
-      // 使用简单的scrollIntoView方法
-      element.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-        inline: 'nearest'
+      // 计算元素相对于滚动容器的顶部位置
+      const relativeTop = elementRect.top - containerRect.top
+      const scrollPosition = relativeTop - headerOffset
+
+      console.log('滚动到:', {
+        elementId: id,
+        relativeTop,
+        scrollPosition,
+        container: scrollContainerRef.current
       })
+
+      // 在正确的滚动容器上执行滚动
+      if (scrollContainerRef.current === document.documentElement) {
+        // 如果是页面级滚动
+        window.scrollBy({
+          top: scrollPosition,
+          behavior: 'smooth'
+        })
+      } else {
+        // 如果是容器内滚动
+        scrollContainerRef.current.scrollBy({
+          top: scrollPosition,
+          behavior: 'smooth'
+        })
+      }
 
       // 立即设置active状态
       setActiveId(id)
@@ -412,19 +468,9 @@ const TableOfContents = ({
       if (onItemClick) {
         onItemClick(id)
       }
-    } else {
-      console.warn('未找到目标元素:', id)
-      console.log(
-        '当前文章容器内的标题元素:',
-        Array.from(
-          articleContainer.querySelectorAll('h1, h2, h3, h4, h5, h6')
-        ).map(h => ({
-          id: h.id,
-          text: h.textContent
-        }))
-      )
-    }
-  }
+    },
+    [onItemClick]
+  )
 
   // 如果没有目录项，不渲染组件
   if (tocItems.length === 0) {
@@ -452,7 +498,7 @@ const TableOfContents = ({
         <TocContent isExpanded={isExpanded}>
           {tocItems.map(item => (
             <TocItemStyled
-              key={item.id} // 使用唯一ID作为key
+              key={item.id}
               level={item.level}
               isActive={activeId === item.id}
               isExpanded={isExpanded}
