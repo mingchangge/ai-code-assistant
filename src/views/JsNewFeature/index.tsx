@@ -1,6 +1,8 @@
 import styled from 'styled-components'
 import MdTabs from '@/components/MarkDownReader/MdTabs'
-import './js-new-features/es6.js'
+// import './js-new-features/es6.js'
+// import './js-new-features/es10.js'
+import './js-new-features/es15.js'
 // 样式
 const StyledReaderBox = styled.div`
   width: 100%;
