@@ -18,6 +18,11 @@ export default MyButton
 `JSX` 会让你把标签放到 `JavaScript` 中。而大括号会让你 “回到” `JavaScript` 中，这样你就可以从你的代码中嵌入一些变量并展示给用户。
 你还可以将 `JSX` 属性 “转义到 `JavaScript`”，但你必须使用 **大括号** 而非引号。例如，`className={title}` 是将 **title** 变量传递给 **className**，作为 `CSS` 的 `class`。
 
+**JSX 的核心价值就是：**
+
+1. **方便 (Convenience)**: 它让我们在 JavaScript 代码中用类似 HTML 的语法来描述 UI 结构
+2. **可读性 (Readability)**: 比起用纯 JavaScript 调用 document.createElement() 等方法，JSX 的结构要清晰得多。
+
 ```jsx
 const info = {
   name: 'react',
@@ -38,6 +43,12 @@ export default MyComponent
 ## 使用 JSX 编写标签
 
 上面所使用的标签语法被称为 JSX。它是可选的，但大多数 React 项目会使用 JSX，主要是它很方便。JSX 允许你在 JavaScript 中编写类似 HTML 的标签,但比 HTML 更加严格。你必须闭合标签，如 `<br />`。你的组件也不能返回多个 JSX 标签。你必须将它们包裹到一个共享的父级中，比如 `<div>...</div>` 或使用空的 `<>...</>` 包裹：
+
+JSX 代码（比如 `<h1>Hello</h1>`）被浏览器执行之前，会被 **Babel** 等工具在代码部署前转换为普通的 `JavaScript` 代码。
+
+浏览器并不能直接运行 JSX。 JSX 代码（例如 `<h1>Hello</h1>`）会被转译成一个标准的 JavaScript 函数调用，它在 React 17 之前是 `React.createElement(...)`，在 React 18/19 之后可能会更简洁，但核心思想不变。
+
+这个函数调用一旦执行，它并不会直接创建真正的 DOM 元素。它会返回一个**普通的 JavaScript 对象**，它是React Element（React 元素），是构建 Virtual DOM 的基本单位。
 
 > `JSX` and `React` 是相互独立的 东西。但它们经常一起使用，但你**可以**单独使用它们中的任意一个，`JSX` 是一种语法扩展，而 `React` 则是一个 `JavaScript` 的库。
 
@@ -825,3 +836,54 @@ function MyButtonShared({
 }
 export default MyButtonShared
 ```
+
+## 总结关于 UI 渲染的流程：
+
+1. 编写 React 组件（JSX）
+2. 组件执行后，`return` 的 JSX 被转译成 **React Element** (React 元素) 对象
+3. 这些元素构成了 **Virtual DOM** 树。
+4. React 将 VDOM 与上一次的 VDOM 进行**对比 (Diffing)**，只将必要的更改应用到实际的浏览器 **Real DOM** 上，这正是 React 高效的原因。
+
+## 总结状态驱动更新的完整流程（数据驱动视图）：
+
+1. **事件触发**： 用户交互或程序逻辑调用 `setCount(...)`。
+2. **重新渲染**： 组件函数再次执行，生成 **新的 Virtual DOM (VDOM) 树**。
+3. **协调 (Reconciliation)/对比 (Diffing)**： React 比较新旧 VDOM 树，计算出**最小差异**。
+4. **变更 (Mutation)/打补丁 (Patching)**： React 只将这些最小差异应用到浏览器的 **真实 DOM 上**。
+
+## useEffect
+
+`useEffect` 的名字就暗示了它的作用：在组件渲染到屏幕上之后（在 React 完成它的“效果”，即 DOM 更新之后），执行某些代码。
+
+我们知道 `useEffect` 接受两个参数：
+
+1. 一个**函数 (Function)**：这就是我们想执行的副作用代码。
+
+2. 一个可选的**依赖项数组 (Dependency Array)**：这是 `useEffect` 最关键的部分。如果 `useEffect` 的依赖项数组是 `[]`，那么这个副作用函数只会在组件**挂载 (Mount)** 到屏幕上时执行**一次**，并且在组件**卸载 (Unmount)** 时执行返回的清理函数（如果有的话）。当 `useEffect` 使用空数组 `[]` 时，它模仿了传统 **类组件 (Class Component)** 中的`componentDidMount()`生命周期方法。当你<font color="red">**省略**</font>第二个参数时，React 就会在**每一次**渲染周期（在 DOM 更新之后）运行你的副作用函数。这模仿了类组件中的 `componentDidMount` (首次执行) 和 `componentDidUpdate` (后续每次更新) 的组合行为。
+
+`useEffect` 的清理机制很巧妙。你需要在你传入的那个**副作用函数**中做一些特别的事情。
+
+为了让 React 知道哪个函数是“清理函数”，你的副作用函数（第一个参数）需要 **返回 (return)** 那个用于清理的函数。
+
+```jsx
+useEffect(() => {
+  // 这是副作用代码 (e.g., 添加事件监听器)
+  const handleResize = () => console.log('Window resized!')
+  window.addEventListener('resize', handleResize)
+
+  // <-- 关键部分在这里！
+
+  return () => {
+    // 这是**清理函数 (Cleanup Function)**
+    // React 会在组件卸载或下次副作用运行前执行它 (e.g., 移除事件监听器)
+    window.removeEventListener('resize', handleResize)
+    console.log('Cleanup complete.')
+  }
+}, []) // 依赖项
+```
+
+`useEffect` 返回的清理函数（Cleanup Function）会在两个关键时刻被调用：
+
+1. **组件 即将卸载 (Unmount)**：在组件从 DOM 中移除之前，执行清理操作防止内存泄漏。
+
+2. **下一次 副作用 开始执行之前**：在 React 重新运行依赖项已更改的 `useEffect` 之前，它会先清理上一次运行的结果。
