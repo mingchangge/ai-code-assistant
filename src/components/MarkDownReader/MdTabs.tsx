@@ -94,6 +94,7 @@ export default function MdTabs({
         label,
         children: (
           <MarkdownReader
+            key={url}
             fileName={url}
             docsPath={docsPath}
             showToc={showToc}

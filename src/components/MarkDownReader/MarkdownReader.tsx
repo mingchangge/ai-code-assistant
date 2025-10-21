@@ -1,26 +1,22 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import MarkdownIt from 'markdown-it'
 import styled from 'styled-components'
 import TableOfContents from './TableOfContents'
 import 'github-markdown-css/github-markdown.css'
+
+const md = new MarkdownIt({ html: true, linkify: true, typographer: true })
 
 const Container = styled.div.withConfig({
   shouldForwardProp: prop => !['isTocExpanded'].includes(prop)
 })<{ isTocExpanded: boolean }>`
   display: flex;
   width: 100%;
-  height: 100%;
-  position: relative;
-
-  .article-container {
+  height: calc(100vh - 168px);
+  .scroll-host {
     flex: 1;
-    max-width: 100%;
-    padding-right: ${props =>
-      props.isTocExpanded ? '320px' : '0'}; /* 根据目录展开状态动态调整 */
-
-    @media (max-width: 1200px) {
-      padding-right: 0;
-    }
+    overflow-y: auto;
+    height: 100%;
+    padding-right: ${p => (p.isTocExpanded ? '320px' : '0')};
   }
 `
 
@@ -124,80 +120,84 @@ const StyledArticle = styled.article`
     }
   }
 `
-
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true
-})
-
+interface TocItem {
+  index: number
+  text: string
+  level: number
+}
 interface Props {
   fileName: string
   docsPath?: string
-  showToc?: boolean // 是否显示目录
+  showToc?: boolean
 }
 
-/**
- * Markdown阅读器组件 - 支持目录功能
- * @param fileName - 文件名
- * @param docsPath - 文档路径，默认为'/docs'
- * @param showToc - 是否显示目录，默认为true
- */
-const MarkdownReader = ({
+export default function MarkdownReader({
   fileName,
   docsPath = '/docs',
   showToc = true
-}: Props) => {
-  const [html, setHtml] = useState<string>('')
-  const [isTocExpanded, setIsTocExpanded] = useState<boolean>(false) // 添加目录展开状态
+}: Props) {
+  const [html, setHtml] = useState('')
+  const [headings, setHeadings] = useState<TocItem[]>([])
+  const headingsRef = useRef<HTMLHeadingElement[]>([]) // ★ 收集标题 DOM
+  const containerRef = useRef<HTMLDivElement>(null) // ★ 滚动容器
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch(`${docsPath}/${fileName}`)
-      const src = await res.text()
-      setHtml(md.render(src))
-    } catch {
-      setHtml('<p>加载失败</p>')
-    }
+  // 加载 markdown
+  useEffect(() => {
+    fetch(`${docsPath}/${fileName}`)
+      .then(r => r.text())
+      .then(src => {
+        const html = md.render(src)
+        setHtml(html)
+
+        // ★ 从 markdown 字符串里提前解析出标题列表（给目录用）
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(html, 'text/html')
+        const hs = Array.from(doc.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+        setHeadings(
+          hs.map((h, i) => ({
+            level: parseInt(h.tagName[1]),
+            text: h.textContent ?? `标题 ${(i + 1).toString()}`,
+            index: i
+          }))
+        )
+      })
+      .catch(() => {
+        setHtml('<p>加载失败</p>')
+      })
   }, [fileName, docsPath])
 
-  useEffect(() => {
-    void load()
+  // ★ 把“滚动到第几个标题”暴露给目录
+  const scrollToHeading = useCallback((index: number) => {
+    const el = headingsRef.current[index]
+    if (!containerRef.current) return
+    const top = el.offsetTop - 120 // 120 = 固定头高度
+    containerRef.current.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+  }, [])
 
-    // 监听 HMR：vite 文件变动后触发
-    if (import.meta.hot) {
-      import.meta.hot.on('vite:beforeUpdate', () => void load())
-    }
-  }, [load])
-
-  // 处理目录项点击
-  const handleTocItemClick = (id: string) => {
-    console.log(`跳转到章节: ${id}`)
-  }
-
-  // 处理目录展开状态变化
-  const handleTocToggle = (expanded: boolean) => {
-    setIsTocExpanded(expanded)
-  }
   return (
-    <Container isTocExpanded={isTocExpanded}>
-      <div className="article-container">
+    <Container isTocExpanded={showToc}>
+      <div className="scroll-host" ref={containerRef}>
         <StyledArticle
           className="markdown-body"
           dangerouslySetInnerHTML={{ __html: html }}
+          ref={el => {
+            // ★ 动态 ref：每渲染一次就重新收集标题 DOM
+            headingsRef.current = []
+            if (!el) return
+            const hs =
+              el.querySelectorAll<HTMLHeadingElement>('h1,h2,h3,h4,h5,h6')
+            hs.forEach((h, i) => (headingsRef.current[i] = h))
+          }}
         />
       </div>
 
-      {/* 条件渲染目录组件 */}
-      {showToc && html && (
+      {showToc && (
         <TableOfContents
-          html={html}
-          onItemClick={handleTocItemClick}
-          onToggle={handleTocToggle}
+          key={fileName}
+          headings={headings}
+          onItemClick={scrollToHeading}
         />
       )}
     </Container>
   )
 }
-
-export default MarkdownReader

@@ -1,17 +1,17 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import styled, { keyframes } from 'styled-components'
 
 // 目录项接口
 interface TocItem {
-  id: string
+  index: number
   text: string
   level: number
 }
 
 // 目录组件属性接口
 interface TableOfContentsProps {
-  html: string
-  onItemClick?: (id: string) => void
+  headings: TocItem[]
+  onItemClick?: (id: number) => void
   onToggle?: (expanded: boolean) => void
   className?: string
 }
@@ -132,21 +132,17 @@ const TocContainer = styled.div.withConfig({
   display: flex;
   flex-direction: column;
 
-  /* 滚动条样式 */
   &::-webkit-scrollbar {
     width: 6px;
   }
-
   &::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 3px;
   }
-
   &::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 3px;
   }
-
   &::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
   }
@@ -163,17 +159,15 @@ const TocHeader = styled.div.withConfig({
   z-index: 10;
   opacity: ${props => (props.isExpanded ? 1 : 0)};
   transition: opacity 0.3s ease;
-`
-
-// 目录标题样式
-const TocTitle = styled.h3`
-  height: 32px;
-  line-height: 32px;
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
-  padding-bottom: 8px;
+  h3 {
+    height: 32px;
+    line-height: 32px;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    padding-bottom: 8px;
+  }
 `
 
 // 目录内容容器样式
@@ -188,21 +182,17 @@ const TocContent = styled.div.withConfig({
   opacity: ${props => (props.isExpanded ? 1 : 0)};
   transition: opacity 0.3s ease;
 
-  /* 滚动条样式 */
   &::-webkit-scrollbar {
     width: 6px;
   }
-
   &::-webkit-scrollbar-track {
     background: #f1f1f1;
     border-radius: 3px;
   }
-
   &::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 3px;
   }
-
   &::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
   }
@@ -233,253 +223,33 @@ const TocItemStyled = styled.div.withConfig({
     background: #f0f8ff;
   }
 `
-
 /**
- * 生成稳定的标题ID
- * @param text - 标题文本
- * @param index - 标题索引
- * @returns 稳定的ID字符串
+ * 目录组件
  */
-const generateStableId = (text: string, index: number): string => {
-  const slug = text
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-
-  return `heading-${slug}-${index.toString()}`
-}
-
-/**
- * 目录组件 - 修复点击跳转和ID设置问题
- * @param html - 渲染后的HTML内容
- * @param onItemClick - 点击目录项的回调函数
- * @param onToggle - 目录展开状态变化的回调函数
- * @param className - 自定义样式类名
- */
-const TableOfContents = ({
-  html,
+export default function TableOfContents({
+  headings,
   onItemClick,
-  onToggle,
   className = ''
-}: TableOfContentsProps) => {
-  const [tocItems, setTocItems] = useState<TocItem[]>([])
-  const [activeId, setActiveId] = useState<string>('')
-  const [isExpanded, setIsExpanded] = useState<boolean>(false)
-  const articleRef = useRef<HTMLElement | null>(null)
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const mutationObserverRef = useRef<MutationObserver | null>(null)
-  const scrollContainerRef = useRef<Element | null>(null)
+}: TableOfContentsProps) {
+  const [isExpanded, setIsExpanded] = useState(true)
+  const [activeIndex, setActiveIndex] = useState(0)
 
-  // 处理目录展开/收起
   const handleToggle = useCallback(() => {
-    const newExpandedState = !isExpanded
-    setIsExpanded(newExpandedState)
-    if (onToggle) {
-      onToggle(newExpandedState)
-    }
-  }, [isExpanded, onToggle])
+    setIsExpanded(v => !v)
+  }, [])
 
-  // 从HTML中提取标题
-  useEffect(() => {
-    if (!html) return
-
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(html, 'text/html')
-    const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6')
-
-    const items: TocItem[] = Array.from(headings).map((heading, index) => {
-      const level = parseInt(heading.tagName.substring(1))
-      const text = heading.textContent ?? `标题 ${(index + 1).toString()}`
-      const id = generateStableId(text, index)
-
-      return { id, text, level }
-    })
-
-    setTocItems(items)
-  }, [html])
-  // 查找真正的滚动容器 - 递归向上查找具有overflow: auto/scroll的祖先
-  const findScrollContainer = (element: Element): Element | null => {
-    let current = element.parentElement
-
-    while (current) {
-      const style = window.getComputedStyle(current)
-      if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
-        return current
-      }
-      current = current.parentElement
-    }
-
-    // 如果没有找到，返回document.documentElement
-    return document.documentElement
-  }
-  // 设置标题ID并监听DOM变化 - 核心修复
-  useEffect(() => {
-    if (tocItems.length === 0) return
-
-    // 查找文章容器
-    articleRef.current = document.querySelector('.article-container')
-    if (!articleRef.current) {
-      console.warn('未找到文章容器')
-      return
-    }
-    // 找到真正的滚动容器
-    const scrollContainer = findScrollContainer(articleRef.current)
-    scrollContainerRef.current = scrollContainer
-    console.log('滚动容器:', scrollContainer)
-
-    // 清理之前的观察器
-    if (observerRef.current) {
-      observerRef.current.disconnect()
-    }
-    if (mutationObserverRef.current) {
-      mutationObserverRef.current.disconnect()
-    }
-
-    // 设置标题ID的函数
-    const setupHeadingIds = () => {
-      const articleHeadings = articleRef.current?.querySelectorAll(
-        'h1, h2, h3, h4, h5, h6'
-      )
-      if (!articleHeadings) return
-
-      articleHeadings.forEach((heading, index) => {
-        if (index < tocItems.length) {
-          // 确保每个标题都有正确的ID
-          heading.id = tocItems[index].id
-        }
-      })
-    }
-
-    // 立即设置ID
-    setupHeadingIds()
-
-    // 创建MutationObserver监听DOM变化
-    mutationObserverRef.current = new MutationObserver(() => {
-      setupHeadingIds()
-    })
-
-    // 观察文章容器内的变化
-    mutationObserverRef.current.observe(articleRef.current, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    })
-
-    // 创建IntersectionObserver监听标题可见性
-    observerRef.current = new IntersectionObserver(
-      entries => {
-        let closestHeading: Element | null = null
-        let minDistance = Infinity
-
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const rect = entry.target.getBoundingClientRect()
-            const distance = Math.abs(rect.top - 100) // 考虑固定导航栏高度
-
-            if (distance < minDistance) {
-              minDistance = distance
-              closestHeading = entry.target
-            }
-          }
-        }
-
-        if (closestHeading) {
-          setActiveId(closestHeading.id)
-        }
-      },
-      {
-        root: articleRef.current,
-        rootMargin: '-100px 0px -50% 0px', // 考虑固定导航栏
-        threshold: [0, 0.1, 0.5, 0.9, 1]
-      }
-    )
-
-    // 观察所有标题元素
-    const articleHeadings = articleRef.current.querySelectorAll(
-      'h1, h2, h3, h4, h5, h6'
-    )
-    articleHeadings.forEach(heading => {
-      observerRef.current?.observe(heading)
-    })
-
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-      }
-      if (mutationObserverRef.current) {
-        mutationObserverRef.current.disconnect()
-      }
-    }
-  }, [tocItems])
-
-  // 处理目录项点击 - 修复滚动定位
   const handleItemClick = useCallback(
-    (id: string) => {
-      if (!articleRef.current) return
-
-      // 在文章容器内查找目标元素
-      const element = articleRef.current.querySelector(`#${id}`)
-      if (!element) {
-        console.warn('未找到目标元素:', id)
-        return
-      }
-      // 如果没有滚动容器，直接返回
-      if (!scrollContainerRef.current) {
-        console.warn('未找到滚动容器')
-        return
-      }
-
-      // 计算精确滚动位置 - 考虑固定导航栏高度
-      const headerOffset = 120 // 固定导航栏高度 + 额外间距
-      const elementRect = element.getBoundingClientRect()
-      const containerRect = scrollContainerRef.current.getBoundingClientRect()
-
-      // 计算元素相对于滚动容器的顶部位置
-      const relativeTop = elementRect.top - containerRect.top
-      const scrollPosition = relativeTop - headerOffset
-
-      console.log('滚动到:', {
-        elementId: id,
-        relativeTop,
-        scrollPosition,
-        container: scrollContainerRef.current
-      })
-
-      // 在正确的滚动容器上执行滚动
-      if (scrollContainerRef.current === document.documentElement) {
-        // 如果是页面级滚动
-        window.scrollBy({
-          top: scrollPosition,
-          behavior: 'smooth'
-        })
-      } else {
-        // 如果是容器内滚动
-        scrollContainerRef.current.scrollBy({
-          top: scrollPosition,
-          behavior: 'smooth'
-        })
-      }
-
-      // 立即设置active状态
-      setActiveId(id)
-
-      // 触发回调
-      if (onItemClick) {
-        onItemClick(id)
-      }
+    (index: number) => {
+      onItemClick?.(index)
+      setActiveIndex(index)
     },
     [onItemClick]
   )
 
-  // 如果没有目录项，不渲染组件
-  if (tocItems.length === 0) {
-    return null
-  }
+  if (!headings.length) return null
 
   return (
     <>
-      {/* 目录图标 */}
       <TocIconContainer
         onClick={handleToggle}
         title={isExpanded ? '收起目录' : '展开目录'}
@@ -487,27 +257,23 @@ const TableOfContents = ({
         <TocIcon isExpanded={isExpanded} />
       </TocIconContainer>
 
-      {/* 目录内容 */}
       <TocContainer isExpanded={isExpanded} className={className}>
-        {/* 固定标题区域 */}
         <TocHeader isExpanded={isExpanded}>
-          <TocTitle>📚 目录</TocTitle>
+          <h3 style={{ margin: 0, fontSize: 16 }}>📚 目录</h3>
         </TocHeader>
-
-        {/* 可滚动的内容区域 */}
         <TocContent isExpanded={isExpanded}>
-          {tocItems.map(item => (
+          {headings.map((h, i) => (
             <TocItemStyled
-              key={item.id}
-              level={item.level}
-              isActive={activeId === item.id}
+              key={i}
+              level={h.level}
+              isActive={i === activeIndex}
               isExpanded={isExpanded}
               onClick={() => {
-                handleItemClick(item.id)
+                handleItemClick(i)
               }}
-              title={item.text}
+              title={h.text}
             >
-              {item.text}
+              {h.text}
             </TocItemStyled>
           ))}
         </TocContent>
@@ -515,5 +281,3 @@ const TableOfContents = ({
     </>
   )
 }
-
-export default TableOfContents
