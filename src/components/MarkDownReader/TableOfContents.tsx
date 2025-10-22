@@ -232,8 +232,7 @@ export default function TableOfContents({
   onItemClick,
   className = ''
 }: TableOfContentsProps) {
-  const [isExpanded, setIsExpanded] = useState(true)
-  // const [activeIndex, setActiveIndex] = useState(0)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   const handleToggle = useCallback(() => {
     setIsExpanded(v => !v)
