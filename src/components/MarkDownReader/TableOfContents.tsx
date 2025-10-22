@@ -11,9 +11,9 @@ interface TocItem {
 // 目录组件属性接口
 interface TableOfContentsProps {
   headings: TocItem[]
-  onItemClick?: (id: number) => void
-  onToggle?: (expanded: boolean) => void
+  activeIndex: number
   className?: string
+  onItemClick?: (id: number) => void
 }
 
 // 展开动画
@@ -228,11 +228,12 @@ const TocItemStyled = styled.div.withConfig({
  */
 export default function TableOfContents({
   headings,
+  activeIndex,
   onItemClick,
   className = ''
 }: TableOfContentsProps) {
   const [isExpanded, setIsExpanded] = useState(true)
-  const [activeIndex, setActiveIndex] = useState(0)
+  // const [activeIndex, setActiveIndex] = useState(0)
 
   const handleToggle = useCallback(() => {
     setIsExpanded(v => !v)
@@ -241,7 +242,6 @@ export default function TableOfContents({
   const handleItemClick = useCallback(
     (index: number) => {
       onItemClick?.(index)
-      setActiveIndex(index)
     },
     [onItemClick]
   )

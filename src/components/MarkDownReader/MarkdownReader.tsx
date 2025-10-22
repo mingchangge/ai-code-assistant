@@ -140,7 +140,7 @@ export default function MarkdownReader({
   const [headings, setHeadings] = useState<TocItem[]>([])
   const headingsRef = useRef<HTMLHeadingElement[]>([]) // ★ 收集标题 DOM
   const containerRef = useRef<HTMLDivElement>(null) // ★ 滚动容器
-
+  const [activeIndex, setActiveIndex] = useState(0) // ★ 当前活动标题索引
   // 加载 markdown
   useEffect(() => {
     fetch(`${docsPath}/${fileName}`)
@@ -165,7 +165,62 @@ export default function MarkdownReader({
         setHtml('<p>加载失败</p>')
       })
   }, [fileName, docsPath])
+  // ① 收集标题 DOM 后启动观察
+  useEffect(() => {
+    if (!containerRef.current || !headingsRef.current.length) return
+    const io = new IntersectionObserver(
+      entries => {
+        // 找出当前最靠近视口顶部的标题
+        let currentActiveIndex = activeIndex
+        const visibleEntries = entries.filter(entry => entry.isIntersecting)
 
+        if (visibleEntries.length > 0) {
+          // 优先选择最靠近顶部的可见元素
+          visibleEntries.sort((a, b) => {
+            const topA = a.boundingClientRect.top
+            const topB = b.boundingClientRect.top
+            return Math.abs(topA) - Math.abs(topB)
+          })
+          currentActiveIndex = Number(
+            visibleEntries[0].target.getAttribute('data-index')
+          )
+        } else {
+          // 没有可见元素时，选择最后一个离开视口的元素
+          let lastVisibleIndex = -1
+          entries.forEach(en => {
+            const idx = Number(en.target.getAttribute('data-index'))
+            const top = en.boundingClientRect.top
+            // 记录离开视口但最靠近视口的元素
+            if (top < 120 && idx > lastVisibleIndex) {
+              lastVisibleIndex = idx
+            }
+          })
+          if (lastVisibleIndex >= 0) {
+            currentActiveIndex = lastVisibleIndex
+          }
+        }
+
+        // 只有当索引确实变化时才更新状态，避免不必要的重渲染
+        if (currentActiveIndex !== activeIndex) {
+          setActiveIndex(currentActiveIndex)
+        }
+      },
+      {
+        root: null, // 使用视口作为根
+        rootMargin: '-120px 0px -80% 0px', // 调整观察区域
+        threshold: 0.1 // 较低的阈值以便更容易触发
+      }
+    )
+
+    headingsRef.current.forEach((h, i) => {
+      h.setAttribute('data-index', String(i))
+      io.observe(h)
+    })
+
+    return () => {
+      io.disconnect()
+    }
+  }, [headings, activeIndex]) // 文章变化后重新观察
   // ★ 把“滚动到第几个标题”暴露给目录
   const scrollToHeading = useCallback((index: number) => {
     const el = headingsRef.current[index]
@@ -196,6 +251,7 @@ export default function MarkdownReader({
           key={fileName}
           headings={headings}
           onItemClick={scrollToHeading}
+          activeIndex={activeIndex} // ★ 实时高亮索引
         />
       )}
     </Container>
