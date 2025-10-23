@@ -19,11 +19,6 @@ interface MdTabsProps {
    * 默认值：'/docs'
    */
   docsPath?: string
-  /**
-   * 是否显示目录
-   * 默认值：true
-   */
-  showToc?: boolean
 }
 
 /**
@@ -48,8 +43,7 @@ const defaultMdMap = import.meta.glob<string>('@/assets/docs/*.md', {
 
 export default function MdTabs({
   mdMap = defaultMdMap,
-  docsPath = '/docs',
-  showToc = true
+  docsPath = '/docs'
 }: MdTabsProps) {
   const tabs: TabItem[] = useMemo(() => {
     return Object.entries(mdMap).map(([filePath, url]) => {
@@ -93,12 +87,7 @@ export default function MdTabs({
         key,
         label,
         children: (
-          <MarkdownReader
-            key={url}
-            fileName={url}
-            docsPath={docsPath}
-            showToc={showToc}
-          />
+          <MarkdownReader key={url} fileName={url} docsPath={docsPath} />
         )
       }))}
     />

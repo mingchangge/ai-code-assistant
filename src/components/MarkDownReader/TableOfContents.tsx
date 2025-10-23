@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import styled, { keyframes } from 'styled-components'
 
 // 目录项接口
@@ -14,6 +14,7 @@ interface TableOfContentsProps {
   activeIndex: number
   className?: string
   onItemClick?: (id: number) => void
+  onExpandedChange?: (isExpanded: boolean) => void
 }
 
 // 展开动画
@@ -230,7 +231,8 @@ export default function TableOfContents({
   headings,
   activeIndex,
   onItemClick,
-  className = ''
+  className = '',
+  onExpandedChange
 }: TableOfContentsProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -244,6 +246,10 @@ export default function TableOfContents({
     },
     [onItemClick]
   )
+  // 通知父组件目录展开状态变化
+  useEffect(() => {
+    onExpandedChange?.(isExpanded)
+  }, [isExpanded, onExpandedChange])
 
   if (!headings.length) return null
 
