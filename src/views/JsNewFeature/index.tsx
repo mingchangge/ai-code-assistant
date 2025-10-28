@@ -5,7 +5,9 @@ import MdTabs from '@/components/MarkDownReader/MdTabs'
 // import './js-new-features/es8.js'
 // import './js-new-features/es9.js'
 // import './js-new-features/es10.js'
-import './js-new-features/es11.js'
+// import './js-new-features/es11.js'
+// import './js-new-features/es12.js'
+import './js-new-features/es13.js'
 // import './js-new-features/es15.js'
 // 样式
 const StyledReaderBox = styled.div`
