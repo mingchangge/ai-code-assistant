@@ -37,6 +37,7 @@ import MetricsTable from './components/MetricsTable'
 import RawTextDisplay from './components/RawTextViewer'
 import SaveModal from './components/SaveModal'
 import HistoryRecords from './components/HistoryRecords'
+import HistoryEcharts from './components/HistoryEcharts'
 
 type UploadChangeParam = Parameters<NonNullable<UploadProps['onChange']>>[0]
 const { Title, Paragraph, Text } = Typography
@@ -59,6 +60,7 @@ const ImageRecognition = () => {
         setLoadingRecords(true)
         const dbRecords = await getAllRecordsFromDB()
         setRecords(dbRecords)
+        console.log('加载历史记录:', dbRecords)
       } catch (err) {
         message.error('加载历史记录失败')
         console.error('加载历史记录失败:', err)
@@ -384,7 +386,7 @@ const ImageRecognition = () => {
           <HistoryRecords records={records} onRecordsChange={setRecords} />
         )}
       </div>
-
+      {!loadingRecords && <HistoryEcharts records={records} />}
       {/* 上传识别与结果展示区 */}
       <Row gutter={[24, 24]}>
         {/* 左侧：上传与识别区 */}
