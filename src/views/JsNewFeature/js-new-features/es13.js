@@ -16,6 +16,11 @@ console.log(Object.hasOwn(obj, 'a')); // true
 console.log(Object.hasOwn(obj, 'hasOwnProperty')); // true
 console.log(Object.hasOwn(obj, 'toString')); // false
 
+const obj1 = { a: 1, b: { c: 2 } }
+const clonedObj = structuredClone(obj1)
+console.log(clonedObj) // { a: 1, b: { c: 2 } }
+console.log(clonedObj === obj1) // false（引用不同）
+console.log(clonedObj.b === obj1.b) // false（引用不同）
 
 const regex = /a(b+)c/d
 const match = regex.exec('abc')
