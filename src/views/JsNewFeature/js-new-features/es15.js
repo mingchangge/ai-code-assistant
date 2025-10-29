@@ -1,12 +1,12 @@
 const arr = [10, 20, 30, 40, 50]
 
-// // 从索引2开始正向查找大于25的元素
-// console.log(arr.findFrom(x => x > 25, undefined, 2)) // 30
+// 从索引2开始正向查找大于25的元素
+console.log(arr.findFrom(x => x > 25, undefined, 2)) // 30
 
-// // 从索引3开始反向查找小于35的元素
-// console.log(arr.findLastFrom(x => x < 35, undefined, 3)) // 30
+// 从索引3开始反向查找小于35的元素
+console.log(arr.findLastFrom(x => x < 35, undefined, 3)) // 30
 
-// 匹配所有表情符号（排除文字符号）
+// // 匹配所有表情符号（排除文字符号）
 // const emojiRegex = /\p{Emoji}--\p{Emoji_Presentation=Text}/v;
 // console.log(emojiRegex.test('😊')); // true（纯表情）
 // console.log(emojiRegex.test('#'));  // false（文字符号）
@@ -16,6 +16,24 @@ const arr = [10, 20, 30, 40, 50]
 // console.log(alphaNumRegex.test('A')); // true
 // console.log(alphaNumRegex.test('3')); // true
 // console.log(alphaNumRegex.test('b')); // false
+
+// 集合操作
+// 交集（&&）：匹配同时属于两个集合的元素。
+// const consonantRegex = /[a-z&&[aeiou]]/v
+// console.log(consonantRegex.test('a')) // true（小写辅音字母）
+// console.log(consonantRegex.test('A')) // false（大写辅音字母，非小写）
+// 并集（||）：匹配属于至少一个集合的元素。
+// const vowelRegex = /[a-z||[AEIOU]]/v
+// console.log(vowelRegex.test('a')) // true（小写元音字母）
+// console.log(vowelRegex.test('A')) // true（大写元音字母）
+// console.log(vowelRegex.test('1')) // false（非字母）
+// 补集（^）：匹配不属于集合的元素。
+// const nonVowelRegex = /[a-z&&[^aeiou]]/v
+// console.log(nonVowelRegex.test('a')) // false（小写元音字母）
+// console.log(nonVowelRegex.test('A')) // false（大写元音字母，非小写）
+// console.log(nonVowelRegex.test('1')) // true（非字母）
+
+
 const asyncIterable = (async function* () {
     for (let i = 0; i < 5; i++) {
         await new Promise(resolve => setTimeout(resolve, 1000 * i))

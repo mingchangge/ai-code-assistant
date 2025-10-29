@@ -55,11 +55,12 @@ console.log(turkishI.test('İ')); // true（土耳其语大写I，u标志可能�
 // console.log(caseInsensitiveRegex.test('HELLO')) // true
 
 
-const arr1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-const grouped = arr1.groupBy(x => (x % 2 === 0 ? 'even' : 'odd'))
-console.log(grouped) // { even: [2, 4, 6, 8, 10], odd: [1, 3, 5, 7, 9] }
-const groupedMap = arr1.groupByToMap(x => (x % 2 === 0 ? 'even' : 'odd'))
-console.log(groupedMap) // Map(2) { 'even' => [2, 4, 6, 8, 10], 'odd' => [1, 3, 5, 7, 9] }
+// 浏览器还不支持这两个方法，需要 polyfill。
+// const arr1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+// const grouped = arr1.groupBy(x => (x % 2 === 0 ? 'even' : 'odd'))
+// console.log(grouped) // { even: [2, 4, 6, 8, 10], odd: [1, 3, 5, 7, 9] }
+// const groupedMap = arr1.groupByToMap(x => (x % 2 === 0 ? 'even' : 'odd'))
+// console.log(groupedMap) // Map(2) { 'even' => [2, 4, 6, 8, 10], 'odd' => [1, 3, 5, 7, 9] }
 
 // function withMetadata(metadata) {
 //     return (target) => {
