@@ -1,21 +1,30 @@
+import { useState } from 'react'
 import { Upload, Button, Divider, Space, Image } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import type { UploadProps } from 'antd'
 
 interface ImageUploaderProps {
-  selectedImage: string | null
-  onImageChange: UploadProps['onChange']
+  sendImageData: (imageUrl: string) => void
 }
 
-const ImageUploader = ({
-  selectedImage,
-  onImageChange
-}: ImageUploaderProps) => {
+const ImageUploader = ({ sendImageData }: ImageUploaderProps) => {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  // 处理图片上传
+  const handleImageChange: UploadProps['onChange'] = info => {
+    if (info.fileList.length > 0) {
+      const file = info.fileList[info.fileList.length - 1]
+      if (file.originFileObj) {
+        setSelectedImage(URL.createObjectURL(file.originFileObj))
+        // 发送图片数据到父组件
+        sendImageData(URL.createObjectURL(file.originFileObj))
+      }
+    }
+  }
   // 上传配置：仅本地预览，阻止自动上传
   const uploadProps: UploadProps = {
     listType: 'picture',
     beforeUpload: () => false,
-    onChange: onImageChange,
+    onChange: handleImageChange,
     maxCount: 1,
     accept: 'image/*',
     showUploadList: false

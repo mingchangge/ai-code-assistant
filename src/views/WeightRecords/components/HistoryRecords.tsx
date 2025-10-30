@@ -390,64 +390,67 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
             style={{
               marginBottom: '16px',
               display: 'flex',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
               alignItems: 'center'
             }}
           >
-            <Space size="middle">
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => void refreshRecords()}
+            {/* 批量操作工具栏 */}
+            {records.length > 0 && (
+              <div
+                style={{
+                  marginBottom: 16,
+                  display: 'flex',
+                  justifyContent: 'flex-end'
+                }}
               >
-                刷新
-              </Button>
-              <Upload {...importUploadProps}>
-                <Button icon={<UploadOutlined />}>导入</Button>
-              </Upload>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={() => void handleExportFile()}
-              >
-                导出
-              </Button>
-            </Space>
-          </div>
-          {/* 批量操作工具栏 */}
-          {records.length > 0 && (
-            <div
-              style={{
-                marginBottom: 16,
-                display: 'flex',
-                justifyContent: 'flex-end'
-              }}
-            >
+                <Space size="middle">
+                  <Button
+                    disabled={selectedRowKeys.length === 0}
+                    onClick={handleClearSelection}
+                    icon={<SyncOutlined />}
+                    size="small"
+                  >
+                    清空选择
+                  </Button>
+                  <Button
+                    danger
+                    disabled={selectedRowKeys.length === 0}
+                    onClick={handleBatchDelete}
+                    icon={<DeleteOutlined />}
+                    size="small"
+                  >
+                    批量删除 ({selectedRowKeys.length})
+                  </Button>
+                </Space>
+              </div>
+            )}
+            <div>
               <Space size="middle">
                 <Button
-                  disabled={selectedRowKeys.length === 0}
-                  onClick={handleClearSelection}
-                  icon={<SyncOutlined />}
-                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={() => void refreshRecords()}
                 >
-                  清空选择
+                  刷新
                 </Button>
+                <Upload {...importUploadProps}>
+                  <Button icon={<UploadOutlined />}>导入</Button>
+                </Upload>
                 <Button
-                  danger
-                  disabled={selectedRowKeys.length === 0}
-                  onClick={handleBatchDelete}
-                  icon={<DeleteOutlined />}
-                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={() => void handleExportFile()}
                 >
-                  批量删除 ({selectedRowKeys.length})
+                  导出
                 </Button>
               </Space>
             </div>
-          )}
+          </div>
+
           <Table
             dataSource={records}
             rowKey="id"
             rowSelection={rowSelection}
             pagination={{
-              pageSize: 6,
+              pageSize: 5,
               showSizeChanger: true,
               pageSizeOptions: ['5', '10', '20'],
               showTotal: total => `共 ${total.toString()} 条记录`
