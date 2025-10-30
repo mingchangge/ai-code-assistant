@@ -4,7 +4,6 @@ import type { BodyMetricsRecord } from './types'
 import BaseECharts from '@/components/BaseECharts'
 
 function HistoryEcharts({ records }: { records: BodyMetricsRecord[] }) {
-  console.log(records)
   const [selected, setSelected] = useState('weight')
   const [chartData, setChartData] = useState<(string | number | undefined)[]>(
     []

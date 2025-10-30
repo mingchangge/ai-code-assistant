@@ -427,16 +427,26 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
             <div>
               <Space size="middle">
                 <Button
+                  variant="outlined"
+                  color="primary"
                   icon={<ReloadOutlined />}
                   onClick={() => void refreshRecords()}
                 >
                   刷新
                 </Button>
                 <Upload {...importUploadProps}>
-                  <Button icon={<UploadOutlined />}>导入</Button>
+                  <Button
+                    icon={<UploadOutlined />}
+                    variant="outlined"
+                    color="purple"
+                  >
+                    导入
+                  </Button>
                 </Upload>
                 <Button
                   icon={<DownloadOutlined />}
+                  variant="outlined"
+                  color="cyan"
                   onClick={() => void handleExportFile()}
                 >
                   导出

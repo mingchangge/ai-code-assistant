@@ -88,11 +88,10 @@ const BaseECharts = memo(
     useEffect(() => {
       if (chartRef.current) {
         // 创建ResizeObserver实例
-        resizeObserverRef.current = new ResizeObserver(entries => {
+        resizeObserverRef.current = new ResizeObserver(() => {
           if (chartInstance.current) {
             chartInstance.current.resize()
           }
-          console.log('resize', entries)
         })
 
         // 开始观察目标元素，将ResizeObserver实例与chartRef指向的DOM节点建立了观察关系
