@@ -313,13 +313,9 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
       setSelectedRowKeys([])
     }
     // 使用useImperativeHandle将方法暴露给父组件
-    useImperativeHandle(
-      ref,
-      () => ({
-        refreshRecords
-      }),
-      [records, onRecordsChange]
-    )
+    useImperativeHandle(ref, () => ({
+      refreshRecords
+    }))
     // 刷新记录列表
     const refreshRecords = async () => {
       try {
@@ -360,7 +356,7 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
         message.warning('暂无记录可导出')
         return
       }
-      console.log('records', records, 'daochu')
+
       try {
         await exportRecordsToFile()
         message.success('导出成功')
