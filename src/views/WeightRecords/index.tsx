@@ -1,33 +1,13 @@
-import { useState, useCallback, useEffect } from 'react'
-import {
-  Card,
-  Typography,
-  message,
-  Row,
-  Col,
-  Button,
-  Space,
-  Upload,
-  Spin
-} from 'antd'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { Card, Typography, message, Row, Col, Spin, Tabs } from 'antd'
 import Tesseract from 'tesseract.js'
-import {
-  DownloadOutlined,
-  UploadOutlined,
-  ReloadOutlined
-} from '@ant-design/icons'
 import type { UploadProps } from 'antd'
 import type {
   BodyMetrics,
   BodyMetricsRecord,
   TableItem
 } from './components/types'
-import {
-  addRecordToDB,
-  getAllRecordsFromDB,
-  exportRecordsToFile,
-  importRecordsFromFile
-} from '@/utils/indexedDbHandler'
+import { addRecordToDB, getAllRecordsFromDB } from '@/utils/indexedDbHandler'
 
 // 导入子组件
 import ImageUploader from './components/ImageUploader'
@@ -36,10 +16,11 @@ import LoadingSpinner from './components/LoadingSpinner'
 import MetricsTable from './components/MetricsTable'
 import RawTextDisplay from './components/RawTextViewer'
 import SaveModal from './components/SaveModal'
-import HistoryRecords from './components/HistoryRecords'
+import HistoryRecords, {
+  type HistoryRecordsRef
+} from './components/HistoryRecords'
 import HistoryEcharts from './components/HistoryEcharts'
 
-type UploadChangeParam = Parameters<NonNullable<UploadProps['onChange']>>[0]
 const { Title, Paragraph, Text } = Typography
 
 const ImageRecognition = () => {
@@ -52,6 +33,7 @@ const ImageRecognition = () => {
   const [saveModalVisible, setSaveModalVisible] = useState<boolean>(false)
   const [records, setRecords] = useState<BodyMetricsRecord[]>([])
   const [loadingRecords, setLoadingRecords] = useState(true)
+  const historyRecordsRef = useRef<HistoryRecordsRef>(null)
 
   // 页面初始化：加载历史记录
   useEffect(() => {
@@ -81,18 +63,6 @@ const ImageRecognition = () => {
         setParsedData(null)
         setProgress(0)
       }
-    }
-  }
-
-  // 刷新记录列表
-  const refreshRecords = async () => {
-    try {
-      const dbRecords = await getAllRecordsFromDB()
-      setRecords(dbRecords)
-      message.success('记录已更新')
-    } catch (err) {
-      message.error('刷新记录失败')
-      console.error('刷新记录失败:', err)
     }
   }
 
@@ -277,7 +247,9 @@ const ImageRecognition = () => {
     try {
       await addRecordToDB(parsedData)
       // 刷新记录列表
-      await refreshRecords()
+      if (historyRecordsRef.current) {
+        await historyRecordsRef.current.refreshRecords()
+      }
       message.success('记录已保存')
       setSaveModalVisible(false)
     } catch (err) {
@@ -286,35 +258,6 @@ const ImageRecognition = () => {
     }
   }
 
-  // 处理导入文件
-  const handleImportFile = async (info: UploadChangeParam) => {
-    if (info.file.status !== 'done' || !info.file.originFileObj) return
-
-    try {
-      const importedCount = await importRecordsFromFile(info.file.originFileObj)
-      await refreshRecords()
-      message.success(`成功导入 ${importedCount.toString()} 条记录`)
-    } catch (err) {
-      message.error('导入失败：文件格式无效')
-      console.error('导入失败:', err)
-    }
-  }
-
-  // 处理导出文件
-  const handleExportFile = async () => {
-    if (records.length === 0) {
-      message.warning('暂无记录可导出')
-      return
-    }
-    console.log('records', records, 'daochu')
-    try {
-      await exportRecordsToFile()
-      message.success('导出成功')
-    } catch (err) {
-      message.error('导出失败')
-      console.error('导出失败:', err)
-    }
-  }
   // 准备表格数据
   const tableData = parsedData
     ? Object.entries(parsedData).map(([key, value]) => ({
@@ -322,14 +265,6 @@ const ImageRecognition = () => {
         value
       }))
     : []
-  // 上传组件配置（用于导入）
-  const importUploadProps: UploadProps = {
-    name: 'file',
-    accept: '.json',
-    showUploadList: false,
-    beforeUpload: () => false, // 阻止自动上传
-    onChange: void handleImportFile
-  }
 
   return (
     <div
@@ -345,48 +280,37 @@ const ImageRecognition = () => {
         体重记录
       </Title>
 
-      {/* 历史记录表格（放在标题下方） */}
+      {/* 历史记录数据管理（放在标题下方） */}
       <div style={{ marginBottom: '32px' }}>
-        <div
-          style={{
-            marginBottom: '16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}
-        >
-          <Title level={4} style={{ margin: 0 }}>
-            历史数据管理
-          </Title>
-          <Space size="middle">
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => void refreshRecords()}
-            >
-              刷新
-            </Button>
-            <Upload {...importUploadProps}>
-              <Button icon={<UploadOutlined />}>导入</Button>
-            </Upload>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={() => void handleExportFile()}
-            >
-              导出
-            </Button>
-          </Space>
-        </div>
-
         {loadingRecords ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <Spin size="large" />
             <Text style={{ marginLeft: 8 }}>加载历史记录中...</Text>
           </div>
         ) : (
-          <HistoryRecords records={records} onRecordsChange={setRecords} />
+          <Tabs
+            defaultActiveKey="1"
+            items={[
+              {
+                label: '历史数据记录',
+                key: '1',
+                children: (
+                  <HistoryRecords
+                    ref={historyRecordsRef}
+                    records={records}
+                    onRecordsChange={setRecords}
+                  />
+                )
+              },
+              {
+                label: '历史数据图表',
+                key: '2',
+                children: <HistoryEcharts records={records} />
+              }
+            ]}
+          />
         )}
       </div>
-      {!loadingRecords && <HistoryEcharts records={records} />}
       {/* 上传识别与结果展示区 */}
       <Row gutter={[24, 24]}>
         {/* 左侧：上传与识别区 */}
