@@ -1,4 +1,4 @@
-// @huggingface/transformers + Xenova/Phi-3-mini-4k-instruct 模型
+// Transformers.js + Phi-3
 
 /// <reference lib="webworker" />
 
@@ -60,7 +60,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         'text-generation',
         'Xenova/Phi-3-mini-4k-instruct',
         {
-          device: 'wasm',
+          device: 'wasm' as const,
           local_files_only: false
         }
       )

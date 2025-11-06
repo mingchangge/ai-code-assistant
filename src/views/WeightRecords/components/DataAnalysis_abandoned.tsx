@@ -1,4 +1,4 @@
-// @huggingface/transformers + Xenova/Phi-3-mini-4k-instruct 模型
+// Transformers.js + Phi-3
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
