@@ -12,6 +12,7 @@
   "dependencies": {
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@huggingface/transformers": "^3.7.6",
+    "@mlc-ai/web-llm": "^0.2.79",
     "@monaco-editor/react": "^4.7.0",
     "antd": "^5.27.1",
     "echarts": "^6.0.0",
