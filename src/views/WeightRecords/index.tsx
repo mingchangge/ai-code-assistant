@@ -18,6 +18,7 @@ import HistoryRecords, {
   type HistoryRecordsRef
 } from './components/HistoryRecords'
 import HistoryEcharts from './components/HistoryEcharts'
+import DataAnalysis from './components/DataAnalysis'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -150,6 +151,11 @@ const ImageRecognition = () => {
                 label: '历史数据图表',
                 key: '2',
                 children: <HistoryEcharts records={records} />
+              },
+              {
+                label: '历史数据分析',
+                key: '3',
+                children: <DataAnalysis records={records} />
               }
             ]}
           />
