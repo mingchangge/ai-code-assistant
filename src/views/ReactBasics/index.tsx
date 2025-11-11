@@ -191,7 +191,7 @@ function ReactBasics() {
     <ReactWrapper>
       <h1>React Basics</h1>
       {/* <MyComponent /> */}
-      <Collapse items={items} defaultActiveKey={['1']} />
+      <Collapse items={items} defaultActiveKey={['1']} accordion={true} />
     </ReactWrapper>
   )
 }
