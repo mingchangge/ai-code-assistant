@@ -97,6 +97,10 @@ const WeightRecords = wrapWithSuspense(
 
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
+const TransformDemo = wrapWithSuspense(
+  () => import('@/views/TransformDemo/index')
+)
+
 // 路由配置
 const routes: RouteObject[] = [
   {
@@ -156,6 +160,10 @@ const routes: RouteObject[] = [
       {
         path: '/weight-records',
         element: createElement(WeightRecords)
+      },
+      {
+        path: '/transform-demo',
+        element: createElement(TransformDemo)
       }
     ]
   },
