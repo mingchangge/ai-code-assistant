@@ -34,6 +34,12 @@ const SideMenu = () => {
       path: '/js-new-features'
     },
     {
+      key: 'machine-learning',
+      icon: <InfoCircleOutlined />,
+      label: '机器学习',
+      path: '/machine-learning'
+    },
+    {
       key: 'ai-code-generator',
       icon: <InfoCircleOutlined />,
       label: 'AI代码生成',
@@ -126,6 +132,12 @@ const SideMenu = () => {
           path: '/weight-records'
         }
       ]
+    },
+    {
+      key: 'transform-demo',
+      icon: <InfoCircleOutlined />,
+      label: 'Transform Demo',
+      path: '/transform-demo'
     }
   ]
 

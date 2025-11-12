@@ -57,7 +57,8 @@ const StyledSider = styled(Sider)<{ collapsed: boolean }>`
 const StyledContent = styled(Content)`
   margin: 24px 16px;
   padding: 24px;
-  min-height: calc(100vh - 112px);
+  height: calc(100vh - 112px);
+  overflow: hidden;
   background: ${setThemeStyle.backgroundColor};
   border: 1px solid ${setThemeStyle.borderColor};
   box-shadow: ${setThemeStyle.shadow};

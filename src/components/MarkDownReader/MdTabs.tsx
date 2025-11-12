@@ -19,6 +19,11 @@ interface MdTabsProps {
    * 默认值：'/docs'
    */
   docsPath?: string
+  /**
+   * 可选的标签位置参数，用于自定义标签位置
+   * 默认值：'left'
+   */
+  tabPosition?: 'left' | 'right' | 'top' | 'bottom'
 }
 
 /**
@@ -43,7 +48,8 @@ const defaultMdMap = import.meta.glob<string>('@/assets/docs/*.md', {
 
 export default function MdTabs({
   mdMap = defaultMdMap,
-  docsPath = '/docs'
+  docsPath = '/docs',
+  tabPosition = 'left'
 }: MdTabsProps) {
   const tabs: TabItem[] = useMemo(() => {
     return Object.entries(mdMap).map(([filePath, url]) => {
@@ -80,7 +86,7 @@ export default function MdTabs({
   return (
     <Tabs
       activeKey={activeKey}
-      tabPosition="left"
+      tabPosition={tabPosition}
       style={{ height: '100%' }}
       onChange={setActiveKey}
       items={tabs.map(({ key, label, url }) => ({

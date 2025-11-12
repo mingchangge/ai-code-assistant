@@ -94,12 +94,13 @@ const WeightTracker = wrapWithSuspense(
 const WeightRecords = wrapWithSuspense(
   () => import('@/views/WeightRecords/index')
 )
-
-const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
-
 const TransformDemo = wrapWithSuspense(
   () => import('@/views/TransformDemo/index')
 )
+const MachineLearning = wrapWithSuspense(
+  () => import('@/views/MachineLearning/index')
+)
+const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
 const routes: RouteObject[] = [
@@ -148,6 +149,10 @@ const routes: RouteObject[] = [
       {
         path: '/js-new-features',
         element: createElement(JsNewFeature)
+      },
+      {
+        path: '/machine-learning',
+        element: createElement(MachineLearning)
       },
       {
         path: '/fixed-equation-visualizer',
