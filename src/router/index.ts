@@ -100,6 +100,7 @@ const TransformDemo = wrapWithSuspense(
 const MachineLearning = wrapWithSuspense(
   () => import('@/views/MachineLearning/index')
 )
+const TensorFlow = wrapWithSuspense(() => import('@/views/TensorFlow/index'))
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
@@ -169,7 +170,11 @@ const routes: RouteObject[] = [
       {
         path: '/transform-demo',
         element: createElement(TransformDemo)
-      }
+      },
+      {
+        path: '/tensorflow',
+        element: createElement(TensorFlow)
+      },
     ]
   },
   {

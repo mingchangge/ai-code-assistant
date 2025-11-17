@@ -40,6 +40,12 @@ const SideMenu = () => {
       path: '/machine-learning'
     },
     {
+      key: 'tensorflow',
+      icon: <InfoCircleOutlined />,
+      label: 'TensorFlow示例',
+      path: '/tensorflow'
+    },
+    {
       key: 'ai-code-generator',
       icon: <InfoCircleOutlined />,
       label: 'AI代码生成',
