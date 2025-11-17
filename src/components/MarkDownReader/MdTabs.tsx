@@ -48,7 +48,7 @@ const defaultMdMap = import.meta.glob<string>('@/assets/docs/*.md', {
 
 export default function MdTabs({
   mdMap = defaultMdMap,
-  docsPath = '/docs',
+  docsPath = '/assets/docs',
   tabPosition = 'left'
 }: MdTabsProps) {
   const tabs: TabItem[] = useMemo(() => {

@@ -36,7 +36,7 @@ function JsNewFeature() {
   )
   return (
     <StyledReaderBox>
-      <MdTabs mdMap={customMdTabs} docsPath="/docs/js-new-features/" />
+      <MdTabs mdMap={customMdTabs} docsPath="/assets/docs/js-new-features/" />
     </StyledReaderBox>
   )
 }

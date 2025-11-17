@@ -13,7 +13,7 @@ export default function MachineLearning() {
     <div>
       <MdTabs
         mdMap={customMdTabs}
-        docsPath="/docs/machine-learning/"
+        docsPath="/assets/docs/machine-learning/"
         tabPosition="top"
       />
     </div>
