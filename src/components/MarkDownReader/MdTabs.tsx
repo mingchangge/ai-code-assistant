@@ -24,6 +24,11 @@ interface MdTabsProps {
    * 默认值：'left'
    */
   tabPosition?: 'left' | 'right' | 'top' | 'bottom'
+  /**
+   * 可选的容器高度参数，用于自定义容器高度
+   * 默认值：'calc(100vh - 168px)'
+   */
+  containerHeight?: string
 }
 
 /**
@@ -49,7 +54,8 @@ const defaultMdMap = import.meta.glob<string>('@/assets/docs/*.md', {
 export default function MdTabs({
   mdMap = defaultMdMap,
   docsPath = '/assets/docs',
-  tabPosition = 'left'
+  tabPosition = 'left',
+  containerHeight = 'calc(100vh - 168px)'
 }: MdTabsProps) {
   const tabs: TabItem[] = useMemo(() => {
     return Object.entries(mdMap).map(([filePath, url]) => {
@@ -93,7 +99,12 @@ export default function MdTabs({
         key,
         label,
         children: (
-          <MarkdownReader key={url} fileName={url} docsPath={docsPath} />
+          <MarkdownReader
+            key={url}
+            fileName={url}
+            docsPath={docsPath}
+            containerHeight={containerHeight}
+          />
         )
       }))}
     />

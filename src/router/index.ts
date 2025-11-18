@@ -101,6 +101,8 @@ const MachineLearning = wrapWithSuspense(
   () => import('@/views/MachineLearning/index')
 )
 const TensorFlow = wrapWithSuspense(() => import('@/views/TensorFlow/index'))
+const IPFS = wrapWithSuspense(() => import('@/views/IPFS/index'))
+
 const NotFound = wrapWithSuspense(() => import('@/views/NotFound/index'))
 
 // 路由配置
@@ -175,6 +177,10 @@ const routes: RouteObject[] = [
         path: '/tensorflow',
         element: createElement(TensorFlow)
       },
+      {
+        path: '/IPFS',
+        element: createElement(IPFS)
+      }
     ]
   },
   {

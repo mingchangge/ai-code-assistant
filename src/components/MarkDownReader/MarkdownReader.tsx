@@ -9,7 +9,6 @@ const md = new MarkdownIt({ html: true, linkify: true, typographer: true })
 const Container = styled.div`
   display: flex;
   width: 100%;
-  height: calc(100vh - 168px);
 `
 const ScrollHost = styled.div.withConfig({
   shouldForwardProp: prop => !['isTocExpanded'].includes(prop)
@@ -128,11 +127,13 @@ interface TocItem {
 interface Props {
   fileName: string
   docsPath?: string
+  containerHeight?: string
 }
 
 export default function MarkdownReader({
   fileName,
-  docsPath = '/docs'
+  docsPath = '/docs',
+  containerHeight = 'calc(100vh - 168px)'
 }: Props) {
   const [html, setHtml] = useState('')
   const [headings, setHeadings] = useState<TocItem[]>([])
@@ -280,7 +281,7 @@ export default function MarkdownReader({
   }, [])
 
   return (
-    <Container>
+    <Container style={{ height: containerHeight }}>
       <ScrollHost isTocExpanded={isTocExpanded} ref={containerRef}>
         <StyledArticle
           className="markdown-body"

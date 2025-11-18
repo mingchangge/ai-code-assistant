@@ -144,6 +144,12 @@ const SideMenu = () => {
       icon: <InfoCircleOutlined />,
       label: 'Transform Demo',
       path: '/transform-demo'
+    },
+    {
+      key: 'IPFS',
+      icon: <InfoCircleOutlined />,
+      label: 'IPFS 示例',
+      path: '/IPFS'
     }
   ]
 
