@@ -12,8 +12,12 @@ export default function DigitRecognizer() {
   const [model, setModel] = useState<tf.LayersModel>()
   const [loading, setLoading] = useState(false)
   const [predictedDigit, setPredictedDigit] = useState<number | null>(null)
+  const [confidence, setConfidence] = useState<number | null>(null)
   const [drawing, setDrawing] = useState(false)
   const lastPos = useRef<{ x: number; y: number } | null>(null)
+  // 调试：显示预处理后的 28x28 图像
+  const debugContainerRef = useRef<HTMLDivElement>(null)
+
   // 初始化画布（移到单独的useLayoutEffect中）
   useLayoutEffect(() => {
     function setupCanvas() {
@@ -44,7 +48,7 @@ export default function DigitRecognizer() {
     void loadModel()
   }, [])
   // 识别数字
-  function recognizeDigit() {
+  async function recognizeDigit() {
     // 确保模型已加载
     if (!model) {
       console.error('模型未加载')
@@ -58,14 +62,45 @@ export default function DigitRecognizer() {
     const imageData = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE)
     // 预处理图像数据
     let imgTensor = tf.browser.fromPixels(imageData, 1) // 灰度图
-    imgTensor = tf.image.resizeBilinear(imgTensor, [28, 28]) // 调整大小
+    // 使用双线性插值
+    // imgTensor = tf.image.resizeBilinear(imgTensor, [28, 28]) // 调整大小
+    // 使用最近邻插值进行缩放
+    imgTensor = tf.image.resizeNearestNeighbor(imgTensor, [28, 28])
     imgTensor = tf.cast(imgTensor, 'float32').div(255).expandDims(0) // 归一化并添加批次维度
     // 进行预测
     const predictions = model.predict(imgTensor) as tf.Tensor
-    // const predictionArray = predictions.arraySync() as number[]
     const predictedDigit = predictions.argMax(1).dataSync()[0]
     console.log('预测结果:', predictedDigit)
     setPredictedDigit(predictedDigit)
+    // 获取最高概率的置信度
+    const predictionArray = predictions.dataSync() as Float32Array
+    let maxValue = predictionArray[0]
+    for (let i = 1; i < predictionArray.length; i++) {
+      if (predictionArray[i] > maxValue) {
+        maxValue = predictionArray[i]
+      }
+    }
+    setConfidence(parseFloat((maxValue * 100).toFixed(1)))
+
+    // 调试：显示预处理后的 28x28 图像
+    const debugCanvas = document.createElement('canvas')
+    debugCanvas.width = 28
+    debugCanvas.height = 28
+
+    const debugCtx = debugCanvas.getContext('2d')
+    const data = await imgTensor.data() // Float32Array, [0,1]
+    const imageDataDebug = debugCtx?.createImageData(28, 28)
+    if (!imageDataDebug || !debugCtx) return
+    for (let i = 0; i < data.length; i++) {
+      const val = Math.round(data[i] * 255)
+      imageDataDebug.data[i * 4] = val // R
+      imageDataDebug.data[i * 4 + 1] = val // G
+      imageDataDebug.data[i * 4 + 2] = val // B
+      imageDataDebug.data[i * 4 + 3] = 255 // A
+    }
+    debugCtx.putImageData(imageDataDebug, 0, 0)
+    // 显示在调试容器中
+    debugContainerRef.current?.appendChild(debugCanvas)
   }
   // 绘制数字
   function startDrawing({ nativeEvent }: React.MouseEvent) {
@@ -95,7 +130,7 @@ export default function DigitRecognizer() {
     // 绘制
     ctx.lineTo(offsetX, offsetY)
     ctx.strokeStyle = '#FFF'
-    ctx.lineWidth = 3
+    ctx.lineWidth = 10
     ctx.lineCap = 'round'
     ctx.stroke()
     // 更新最后位置
@@ -120,6 +155,11 @@ export default function DigitRecognizer() {
     // 清除预测结果
     setPredictedDigit(null)
     lastPos.current = null
+    setConfidence(null)
+    // 清除调试容器内容
+    if (debugContainerRef.current) {
+      debugContainerRef.current.innerHTML = ''
+    }
   }
   return (
     <div style={{ userSelect: 'none' }}>
@@ -139,7 +179,7 @@ export default function DigitRecognizer() {
         <Space>
           <Button
             type="primary"
-            onClick={recognizeDigit}
+            onClick={() => void recognizeDigit()}
             disabled={loading || drawing}
           >
             识别
@@ -147,7 +187,18 @@ export default function DigitRecognizer() {
           <Button onClick={clearCanvas}>清除</Button>
         </Space>
       </div>
-      <p>预测结果: {predictedDigit}</p>
+      <Space>
+        <p>预测结果: {predictedDigit ?? '未预测'}</p>
+        <p>置信度: {confidence ?? '0'}%</p>
+      </Space>
+      {/* 调试：显示预处理后的 28x28 图像 */}
+      <div style={{ position: 'relative' }}>
+        <p>预处理后的 28x28 图像:</p>
+        <div
+          ref={debugContainerRef}
+          style={{ position: 'absolute', top: '-5px', left: '160px' }}
+        ></div>
+      </div>
     </div>
   )
 }
