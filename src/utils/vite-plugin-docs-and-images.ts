@@ -54,33 +54,34 @@ export default function serveDocsImages(
         }
         // 获取请求路径
         const requestUrl = decodeURIComponent(req.url)
-
-        // 判断是否是md文件请求
-        if (requestUrl.endsWith('.md')) {
-          // 提取路径部分和文件名部分
-          const pathParts = requestUrl.split('/').filter(Boolean)
-          const fileName = pathParts.pop() ?? ''
-          const dirPath = '/' + pathParts.join('/')
-
-          // 映射到本地文件路径
-          const localDir = mapPath(dirPath)
-          const file = resolve(localDir, fileName)
-          try {
-            const content = readFileSync(file, 'utf-8')
-            res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
-            res.end(content)
-          } catch {
-            res.statusCode = 404
-            res.end('Not found')
-            next() // 交给下一条规则（或 404）
-          }
-        } else {
+        // 非md文件请求不处理
+        if (!requestUrl.endsWith('.md')) {
           next()
+          return
+        }
+
+        // 提取路径部分和文件名部分
+        const pathParts = requestUrl.split('/').filter(Boolean)
+        const fileName = pathParts.pop() ?? ''
+        const dirPath = '/' + pathParts.join('/')
+
+        // 映射到本地文件路径
+        const localDir = mapPath(dirPath)
+        const file = resolve(localDir, fileName)
+        try {
+          const content = readFileSync(file, 'utf-8')
+          res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
+          res.end(content)
+        } catch {
+          res.statusCode = 404
+          res.end('Not found')
+          next() // 交给下一条规则（或 404）
         }
       })
 
       /* -------- 2. 图片资源 -------- */
       server.middlewares.use('/images', (req, res, next) => {
+        console.log('req.url', req.url)
         if (!req.url) {
           next()
           return
@@ -93,19 +94,23 @@ export default function serveDocsImages(
         if (req.headers.referer) {
           try {
             const referer = new URL(req.headers.referer)
-            const pathParts = referer.pathname.split('/').filter(Boolean)
-
-            // 如果referer是MD文件，提取其所在目录
-            if (referer.pathname.endsWith('.md')) {
-              const mdDirPath = '/' + pathParts.slice(0, -1).join('/')
-              const localMdDir = mapPath(mdDirPath)
-              imageDirs.push(resolve(localMdDir, 'images'))
-            }
+            console.log('referer', referer)
+            const pathname = referer.pathname
+            console.log('referer.pathname', pathname)
+            //将referer.pathname的图片路径可能性拼接成数组
+            const pathArray = [
+              `/views/${pathname}/docs/images`,
+              `/views/${pathname}/images`
+            ]
+            // 遍历pathArray，将每个路径映射到本地目录
+            pathArray.forEach(path => {
+              const localDir = mapPath(path)
+              imageDirs.push(localDir)
+            })
           } catch (error) {
             console.error('解析 referer URL 失败:', error)
           }
         }
-
         // 添加默认的images目录
         imageDirs.push(resolve('src/assets/docs/images'))
 
