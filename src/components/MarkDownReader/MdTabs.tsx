@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Tabs } from 'antd'
+import { Tabs, Tooltip } from 'antd'
+import styled from 'styled-components'
 import MarkdownReader from './MarkdownReader'
 
 interface TabItem {
@@ -29,6 +30,11 @@ interface MdTabsProps {
    * 默认值：'calc(100vh - 168px)'
    */
   containerHeight?: string
+  /**
+   * 可选的左侧标签宽度参数
+   * 默认值：180
+   */
+  tabWidth?: number | string
 }
 
 /**
@@ -43,7 +49,26 @@ const formatFileName = (fileName: string): string => {
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('')
 }
+// 自定义标签容器样式
+const StyledTabs = styled(Tabs).withConfig({
+  shouldForwardProp: prop => !['tabWidth'].includes(prop)
+})<{
+  tabWidth?: number
+}>`
+  height: 100%;
+  .ant-tabs-tabpane {
+    height: 100%;
+  }
 
+  // 标签项样式
+  .tab-label {
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+  }
+`
 // 默认的mdMap，当外部不传入时使用
 const defaultMdMap = import.meta.glob<string>('@/assets/docs/*.md', {
   query: '?url',
@@ -55,7 +80,8 @@ export default function MdTabs({
   mdMap = defaultMdMap,
   docsPath = '/assets/docs',
   tabPosition = 'left',
-  containerHeight = 'calc(100vh - 168px)'
+  containerHeight = 'calc(100vh - 168px)',
+  tabWidth = 120
 }: MdTabsProps) {
   const tabs: TabItem[] = useMemo(() => {
     return Object.entries(mdMap).map(([filePath, url]) => {
@@ -90,14 +116,20 @@ export default function MdTabs({
   }
 
   return (
-    <Tabs
+    <StyledTabs
       activeKey={activeKey}
       tabPosition={tabPosition}
       style={{ height: '100%' }}
       onChange={setActiveKey}
       items={tabs.map(({ key, label, url }) => ({
         key,
-        label,
+        label: (
+          <Tooltip title={label} placement="right">
+            <div style={{ maxWidth: tabWidth }} className="tab-label">
+              {label}
+            </div>
+          </Tooltip>
+        ),
         children: (
           <MarkdownReader
             key={url}
