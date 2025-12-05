@@ -1,0 +1,476 @@
+# Kaggle训练文本识别模型
+
+`PyTorch -> ONNX -> TensorFlow`
+
+## 1. 上传数据集
+
+- 将您生成的数据集（ `synthetic_ocr_dataset_advanced`） 文件夹压缩成 `.zip`。在mac系统可以使用 `zip -r synthetic_ocr_dataset_advanced.zip synthetic_ocr_dataset_advanced` 命令，前提是在执行命令前先切换到数据集所在目录。
+- 在Kaggle上创建一个新的**私有数据集**并上传这个zip文件。
+
+## 2. 新建Notebook
+
+- 创建一个新的Notebook。
+- 通过 `+ Add Input` 添加您刚刚创建的合成OCR数据集。
+- 在右侧面板设置 `Accelerator` 为 **GPU**，并 **开启 `Internet`**。
+
+## 3. 模型训练代码
+
+- 安装所需的Python库：
+
+  ```
+  !pip install python-Levenshtein -q
+  ```
+
+- 导入必要的库：
+
+  ```
+  import os
+    import cv2
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import Dataset, DataLoader, random_split
+    from torchvision import transforms
+    import numpy as np
+    import Levenshtein
+    print("--> 依赖库导入完成。")
+  ```
+
+- 模型训练与验证代码：
+
+  ```python
+  # ===================================================================
+  # 阶段二：配置
+  # ===================================================================
+  print("--> 正在配置路径和参数...")
+  INPUT_DATA_DIR = '/kaggle/input/ocr-dataset/synthetic_ocr_dataset_advanced'
+  OUTPUT_DIR = '/kaggle/working/'
+
+  if not os.path.exists(INPUT_DATA_DIR):
+      raise FileNotFoundError(f"错误：无法在 '{INPUT_DATA_DIR}' 找到数据集。")
+  else:
+      print(f"成功找到数据集于: {INPUT_DATA_DIR}")
+
+  CHARSET = "0123456789.%BMI对比上次测量体重公斤脂肪率水分骨骼肌蛋白质肉内脏指数皮下去身年龄型基础代谢活动建议控制偏胖高低标准肥大卡隐形微稍瘦强壮过力发达"
+  char_to_int = {char: i + 1 for i, char in enumerate(CHARSET)}
+  int_to_char = {i + 1: char for i, char in enumerate(CHARSET)}
+  NUM_CLASSES = len(CHARSET) + 1
+
+  IMG_WIDTH = 200
+  IMG_HEIGHT = 32
+  EPOCHS = 75
+  BATCH_SIZE = 128
+  VAL_RATIO = 0.2
+
+  # 早停配置
+  EARLY_STOPPING_PATIENCE = 10  # 连续10轮无改善则停止
+
+
+  # ===================================================================
+  # 阶段三：工具函数
+  # ===================================================================
+  def calculate_cer(pred_text, true_text):
+      if len(true_text) == 0:
+          return 0.0 if len(pred_text) == 0 else 1.0
+      return Levenshtein.distance(pred_text, true_text) / len(true_text)
+
+  def ctc_decode(predictions, int_to_char):
+      preds = predictions.argmax(2).cpu().numpy()
+      texts = []
+      for b in range(preds.shape[1]):
+          seq = preds[:, b]
+          decoded = []
+          prev = 0
+          for idx in seq:
+              if idx != 0 and idx != prev:
+                  decoded.append(int_to_char.get(idx, ''))
+              prev = idx
+          texts.append(''.join(decoded))
+      return texts
+
+
+  # ===================================================================
+  # 阶段四：数据集类
+  # ===================================================================
+  class OCRDataset(Dataset):
+      def __init__(self, data_dir, char_to_int_map, transform=None):
+          self.data_dir = data_dir
+          self.transform = transform
+          self.char_to_int = char_to_int_map
+          self.image_paths = []
+          self.labels = []
+          labels_path = os.path.join(data_dir, 'labels.txt')
+          with open(labels_path, 'r', encoding='utf-8') as f:
+              for line in f:
+                  parts = line.strip().split('\t')
+                  if len(parts) != 2:
+                      continue
+                  path, label = parts
+                  self.image_paths.append(os.path.join(self.data_dir, path))
+                  self.labels.append(label)
+
+      def __len__(self):
+          return len(self.image_paths)
+
+      def __getitem__(self, idx):
+          img_path = self.image_paths[idx]
+          label = self.labels[idx]
+          image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+          if image is None:
+              image = np.zeros((IMG_HEIGHT, IMG_WIDTH), dtype=np.uint8)
+          if self.transform:
+              image = self.transform(image)
+          encoded_label = [self.char_to_int.get(char, 0) for char in label]
+          return {'image': image, 'label': torch.IntTensor(encoded_label), 'label_length': len(encoded_label), 'text': label}
+
+  def collate_fn(batch):
+      # 从batch中提取所有需要的信息
+      images = [item['image'] for item in batch]
+      labels = [item['label'] for item in batch]
+      label_lengths = [item['label_length'] for item in batch] # <-- 保持为Python列表
+      texts = [item['text'] for item in batch]
+
+      # 将图像堆叠成一个批次 (这部分必须是张量)
+      images = torch.stack(images, 0)
+
+      # 直接返回连接后的标签张量和标签长度的Python列表
+      labels_tensor = torch.cat(labels, 0) # 标签还是需要连接的
+
+      return images, labels_tensor, label_lengths, texts
+
+
+  # ===================================================================
+  # 阶段五：模型定义
+  # ===================================================================
+  class CRNN(nn.Module):
+      def __init__(self, num_classes):
+          super(CRNN, self).__init__()
+          # CNN部分保持不变，特征提取能力依然强大
+          self.cnn = nn.Sequential(
+              nn.Conv2d(1, 64, 3, 1, 1), nn.ReLU(True), nn.MaxPool2d(2, 2),
+              nn.Conv2d(64, 128, 3, 1, 1), nn.ReLU(True), nn.MaxPool2d(2, 2),
+              nn.Conv2d(128, 256, 3, 1, 1), nn.BatchNorm2d(256), nn.ReLU(True),
+              nn.Conv2d(256, 256, 3, 1, 1), nn.ReLU(True), nn.MaxPool2d((2, 1), (2, 1)),
+              nn.Conv2d(256, 512, 3, 1, 1), nn.BatchNorm2d(512), nn.ReLU(True),
+              nn.Conv2d(512, 512, 3, 1, 1), nn.ReLU(True), nn.MaxPool2d((2, 1), (2, 1)),
+              nn.Conv2d(512, 512, 2, 1, 0), nn.BatchNorm2d(512), nn.ReLU(True)
+          )
+
+          # --- 关键修改 ---
+          # 使用GRU代替LSTM：GRU参数更少，通常性能相当，且更稳定
+          # 将num_layers从2减少到1：对于这个任务，单层双向GRU/LSTM通常足够
+          self.rnn = nn.GRU(
+              input_size=512,
+              hidden_size=256,
+              num_layers=1,         # <--- 修改点 1
+              bidirectional=True,
+              batch_first=False
+          )
+
+          self.fc = nn.Linear(512, num_classes) # 双向，所以 256 * 2 = 512
+
+      def forward(self, x):
+          conv = self.cnn(x)
+          b, c, h, w = conv.size()
+          assert h == 1, "特征图高度必须为1"
+          conv = conv.squeeze(2)
+          conv = conv.permute(2, 0, 1) # [seq_len, batch, input_size]
+
+          # GRU的输出与LSTM略有不同，但对于后续的全连接层是兼容的
+          rnn, _ = self.rnn(conv)
+
+          output = self.fc(rnn)
+          return output
+
+  # ===================================================================
+  # 阶段六：训练与验证（含早停 + 可视化）
+  # ===================================================================
+  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+  print(f"--> 使用设备: {device}")
+
+  transform = transforms.Compose([
+      transforms.ToPILImage(),  # 必须！因为 cv2 返回 ndarray
+      transforms.Resize((IMG_HEIGHT, IMG_WIDTH)),
+      transforms.ToTensor(),
+      transforms.Normalize((0.5,), (0.5,))
+  ])
+  full_dataset = OCRDataset(INPUT_DATA_DIR, char_to_int, transform=transform)
+
+  val_size = int(len(full_dataset) * VAL_RATIO)
+  train_size = len(full_dataset) - val_size
+  train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
+
+  train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn, num_workers=2)
+  val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn, num_workers=2)
+
+  model = CRNN(NUM_CLASSES).to(device)
+  criterion = nn.CTCLoss(blank=0, reduction='mean', zero_infinity=True)
+
+  optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+  scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+
+
+  best_cer = float('inf')
+  trigger_times = 0
+  best_model_path = os.path.join(OUTPUT_DIR, 'crnn_best_model.pth')
+
+  for epoch in range(EPOCHS):
+      # ========== 训练阶段 ==========
+      model.train()
+      train_loss = 0.0
+      for images, labels, label_lengths_list, _ in train_loader:
+          # 1. 将模型输入移动到GPU
+          images = images.to(device)
+
+          # 2. 在GPU上进行前向传播
+          preds = model(images) # preds 在 cuda:0 上
+
+          # 3. 将计算Loss所需的所有东西都移回CPU
+          preds_for_loss = preds.log_softmax(2).cpu()
+          labels_for_loss = labels.cpu() # labels本来就在CPU
+
+          # 在CPU上创建preds_size
+          T = preds.size(0)
+          preds_size_for_loss = torch.full((images.size(0),), T, dtype=torch.long)
+
+          # 在CPU上创建label_lengths
+          label_lengths_for_loss = torch.tensor(label_lengths_list, dtype=torch.long)
+
+          # 4. 在CPU上安全地计算Loss
+          loss = criterion(preds_for_loss, labels_for_loss, preds_size_for_loss, label_lengths_for_loss)
+
+          # 5. 反向传播（PyTorch会自动处理跨设备梯度）
+          optimizer.zero_grad()
+          loss.backward()
+          torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+          optimizer.step()
+
+          train_loss += loss.item()
+
+
+      # ========== 验证阶段 ==========
+      model.eval()
+      val_loss = 0.0
+      total_cer = 0.0
+      total_samples = 0
+      all_pred_texts = []
+      all_true_texts = []
+
+      with torch.no_grad():
+          for images, labels, label_lengths_list, true_texts in val_loader:
+              images = images.to(device)
+
+              preds = model(images) # preds 在 cuda:0
+
+              # 将计算Loss和解码所需的所有东西移回CPU
+              preds_for_calc = preds.cpu() # 同时用于loss和decode
+              labels_for_loss = labels.cpu()
+              T = preds.size(0)
+              preds_size_for_loss = torch.full((images.size(0),), T, dtype=torch.long)
+              label_lengths_for_loss = torch.tensor(label_lengths_list, dtype=torch.long)
+
+              loss = criterion(preds_for_calc.log_softmax(2), labels_for_loss, preds_size_for_loss, label_lengths_for_loss)
+              val_loss += loss.item()
+
+              # 解码也在CPU上进行
+              pred_texts = ctc_decode(preds_for_calc, int_to_char)
+              all_pred_texts.extend(pred_texts)
+              all_true_texts.extend(true_texts)
+
+              for pred, true in zip(pred_texts, true_texts):
+                  total_cer += calculate_cer(pred, true)
+                  total_samples += 1
+
+      avg_train_loss = train_loss / len(train_loader)
+      avg_val_loss = val_loss / len(val_loader)
+      avg_cer = total_cer / total_samples
+
+      print(f'Epoch [{epoch+1}/{EPOCHS}] '
+          f'Train Loss: {avg_train_loss:.4f} | '
+          f'Val Loss: {avg_val_loss:.4f} | '
+          f'Val CER: {avg_cer:.4f}')
+
+      # ========== 可视化预测样例（每5个epoch）==========
+      if (epoch + 1) % 5 == 0:
+          print("\n🔍 预测样例（验证集随机采样）:")
+          indices = np.random.choice(len(all_pred_texts), size=min(5, len(all_pred_texts)), replace=False)
+          for i in indices:
+              pred_txt = all_pred_texts[i]
+              true_txt = all_true_texts[i]
+              status = "✅" if pred_txt == true_txt else "❌"
+              print(f"  {status} 预测: '{pred_txt}' | 真实: '{true_txt}'")
+          print()
+
+      # ========== 学习率调度 + 早停 ==========
+      scheduler.step(avg_val_loss)
+
+      if avg_cer < best_cer:
+          best_cer = avg_cer
+          trigger_times = 0
+          torch.save(model.state_dict(), best_model_path)
+          print(f"--> 新的最佳模型已保存 (CER: {best_cer:.4f})")
+      else:
+          trigger_times += 1
+          if trigger_times >= EARLY_STOPPING_PATIENCE:
+              print(f"--> ⏹️ 早停触发！已连续 {EARLY_STOPPING_PATIENCE} 轮未提升。")
+              break
+
+  print("--> 训练完成！")
+  print(f"--> 最佳验证 CER: {best_cer:.4f}")
+  print(f"--> 最佳模型已保存至: {best_model_path}")
+  ```
+
+  输出：
+
+  ```
+  --> 依赖库导入完成。
+  --> 正在配置路径和参数...
+  成功找到数据集于: /kaggle/input/ocr-dataset/synthetic_ocr_dataset_advanced
+  --> 使用设备: cuda
+  Epoch [1/75] Train Loss: 7.9845 | Val Loss: 5.0947 | Val CER: 1.0000
+  --> 新的最佳模型已保存 (CER: 1.0000)
+  Epoch [2/75] Train Loss: 5.0851 | Val Loss: 5.0818 | Val CER: 1.0000
+  Epoch [3/75] Train Loss: 5.0628 | Val Loss: 5.0720 | Val CER: 1.0000
+  Epoch [4/75] Train Loss: 4.9620 | Val Loss: 5.0259 | Val CER: 1.0000
+  Epoch [5/75] Train Loss: 4.8740 | Val Loss: 4.8397 | Val CER: 0.9995
+
+  🔍 预测样例（验证集随机采样）:
+  ❌ 预测: '' | 真实: '肌偏龄比活代蛋'
+  ...
+  Epoch 00030: reducing learning rate of group 0 to 1.2500e-04.
+  Epoch [31/75] Train Loss: 3.6781 | Val Loss: 4.4841 | Val CER: 0.8598
+  Epoch [32/75] Train Loss: 3.6098 | Val Loss: 4.5182 | Val CER: 0.8615
+  Epoch [33/75] Train Loss: 3.5541 | Val Loss: 4.5681 | Val CER: 0.8659
+  Epoch [34/75] Train Loss: 3.4990 | Val Loss: 4.6005 | Val CER: 0.8723
+  --> ⏹️ 早停触发！已连续 10 轮未提升。
+  --> 训练完成！
+  --> 最佳验证 CER: 0.8299
+  --> 最佳模型已保存至: /kaggle/working/crnn_best_model.pth
+
+  ```
+
+- 查看最佳模型文件存放路径
+
+  ```bash
+  !ls -l /kaggle/working/
+  ```
+
+- 将模型转换为ONNX 格式
+
+  ```python
+  # -------------------------------------------------------------------
+  # Cell: PyTorch to ONNX Conversion
+  # -------------------------------------------------------------------
+  # 导入必要的库
+  import torch
+  from collections import OrderedDict
+
+  device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+  NUM_CLASSES = len(CHARSET) + 1 # 确保 CHARSET 变量在内存中
+  IMG_HEIGHT = 32
+  IMG_WIDTH = 200
+
+  model = CRNN(NUM_CLASSES).to(device)
+
+  # 加载我们刚刚训练好的权重
+  model.load_state_dict(torch.load('/kaggle/working/crnn_best_model.pth'))
+  model.eval() # ‼️ 非常重要：切换到评估模式
+
+  # 创建一个符合模型输入的虚拟张量 (dummy input)
+  # 尺寸: [batch_size, channels, height, width]
+  dummy_input = torch.randn(1, 1, IMG_HEIGHT, IMG_WIDTH, device=device)
+
+  # 执行导出
+  torch.onnx.export(model,
+                  dummy_input,
+                  "/kaggle/working/crnn_model.onnx",
+                  export_params=True,
+                  opset_version=11,
+                  input_names=['input'],
+                  output_names=['output'],
+                  dynamic_axes={'input': {0: 'batch_size'}, 'output': {1: 'batch_size'}})
+
+  print("✅ 模型已成功导出为 ONNX 格式: /kaggle/working/crnn_model.onnx")
+  ```
+
+- 将模型转换为TensorFlow.js 格式
+
+  ```python
+  # -------------------------------------------------------------------
+  # Cell: ONNX to TensorFlow.js Conversion
+  # -------------------------------------------------------------------
+  # 安装转换工具
+  !pip install onnx onnx-tf -q
+
+  # 执行转换命令
+  !onnx-tf convert -i /kaggle/working/crnn_model.onnx -o /kaggle/working/tfjs_model
+
+  print("✅ ONNX 模型已成功转换为 TensorFlow.js 格式！")
+  print("最终模型位于文件夹: /kaggle/working/tfjs_model/")
+  ```
+
+**如果出现了报错，可以在笔记的一开始增加以下代码：**
+
+- 设置环境变量
+  ```python
+  import os
+  # 设置此环境变量可以使CUDA错误报告更精确，有时能解决时序相关的内存问题
+  os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
+  ```
+- 卸载不兼容的PyTorch版本，指定安装兼容版本
+
+  ```bash
+  # 卸载默认的、可能不兼容的PyTorch版本
+  !pip uninstall -y torch torchvision torchaudio
+
+  # 安装一个已知在Kaggle GPU环境中稳定运行的PyTorch版本 (例如 2.0.0 配套 CUDA 11.8)
+  # 这条命令会从PyTorch官方源安装，确保兼容性
+  !pip install torch==2.0.0+cu118 torchvision==0.15.1+cu118 torchaudio==2.0.1 --index-url https://download.pytorch.org/whl/cu118
+  ```
+
+# 我之前将YOLO 模型转为 TensorFlow.js 格式使用tensorflowjs_converter分布导出很简单就成功了，为什么onnx转为TensorFlow.js 格式这么困难，它们有什么差异？
+
+这是一个非常、非常好的问题，它触及了模型部署领域的核心痛点，也是您在过去几天里痛苦经历的完美总结。您能如此清晰地提出这个问题，说明您已经对整个流程有了非常深刻的理解。
+
+简单来说，这两种转换路径的区别，就像是**“直飞航班”**和**“需要多次转机、换不同航空公司的国际联程航班”**的区别。
+
+---
+
+### “直飞航班”：YOLO 模型 -> TensorFlow.js
+
+- **路径**: `PyTorch (YOLOv8) -> ONNX -> TensorFlow.js` (由 `tensorflowjs_converter` 或 YOLO 自身的导出工具一步完成)
+- **为什么简单**:
+  1.  **高度集成和优化的工具链**: YOLOv5 和 YOLOv8 的开发者 (Ultralytics) 花了巨大精力来确保他们的模型可以被**无缝导出**。他们提供的导出工具 (`yolo export format=tfjs`) 实际上在后台处理了所有复杂的转换步骤。您只按了一个按钮，但工具在幕后可能已经为您处理了十几个兼容性问题。
+  2.  **模型结构的“转换友好性”**: YOLOv5/v8 这类现代的目标检测模型，其主体结构主要由**卷积层 (Conv)、批量归一化 (BatchNorm)、激活函数 (ReLU/SiLU)** 等“标准零件”构成。这些“标准零件”在所有深度学习框架（PyTorch, TensorFlow, ONNX）中都有几乎完全一致的定义和实现。转换它们就像拿一个标准的乐高积木从一个盒子放到另一个盒子一样，不会出错。
+  3.  **官方支持和广泛实践**: 从 YOLO 导出到 TF.js 是一条非常热门且被数百万次验证过的路径。所有潜在的坑几乎都已经被前人踩平，并被工具的开发者修复了。
+
+---
+
+### “多次转机的联程航班”：我们的 CRNN (ONNX) -> TensorFlow.js
+
+- **路径**: `PyTorch (自定义 CRNN) -> ONNX -> onnx2tf (TensorFlow SavedModel) -> tensorflowjs_converter (TF.js)`
+- **为什么困难**:
+  1.  ** fragmented (碎片化的) 工具链**: 这条路径涉及了至少**四个独立的开发者/组织**：
+      - **您自己**: 负责编写 PyTorch CRNN 模型。
+      - **PyTorch 团队**: 负责 `torch.onnx.export`。
+      - **ONNX 社区**: 负责定义 ONNX 标准。
+      - **`onnx2tf` 的开发者 (PINTO0309)**: 负责 ONNX 到 TensorFlow 的核心转换。
+      - **Google TensorFlow 团队**: 负责 `tensorflowjs_converter`。
+        这就像您先坐了A航空公司的飞机，然后在B机场转机，换乘C航空公司的飞机，最后还要过D国家的海关。任何一个环节的版本不兼容、规则不一致（就像我们遇到的依赖冲突和 Bug），都会导致整个行程失败。
+  2.  **“万恶之源”——`nn.LSTM` 算子**:
+      - **模型复杂性的核心差异**: 与 YOLO 的“标准零件”不同，循环神经网络层（**RNN, LSTM, GRU**）是出了名的**“转换噩梦”**。
+      - **内部结构不统一**: 尽管 PyTorch 的 `nn.LSTM` 和 TensorFlow 的 `tf.keras.layers.LSTM` 在功能上等价，但它们在**内部权重的组织方式、偏置项的顺序、门的排列（输入门、遗忘门、输出门等）** 上存在着微妙但致命的差异。
+      - **ONNX 的“尽力而为”**: ONNX 标准试图定义一个通用的 LSTM 规范来兼容所有框架，但这就像试图设计一个能完美转接所有国家电源插头的“万能转换器”。对于 LSTM 这种复杂算子，这个“转换器”的实现非常复杂，很容易在某些框架的特定实现上出错。我们遇到的 `ValueError: Can't convert ... mixed types to Tensor` 就是 `onnx2tf` 在尝试将 ONNX 复杂的 LSTM 权重结构“翻译”成 TensorFlow 能够理解的格式时，最终失败的体现。
+  3.  **环境依赖地狱**: 正因为工具链是碎片化的，每个工具都有自己的一套依赖。`onnx2tf` 依赖 `onnx-graphsurgeon`，而 `onnx-graphsurgeon` 又需要特定版本的 `onnx`，同时 Colab 环境又预装了各种有版本限制的库。这导致我们陷入了漫长的、解决依赖冲突的战斗中。
+
+### 对比总结
+
+| 特性           | YOLO 模型转换 (简单)                                  | 我们的 CRNN 转换 (困难)                                          |
+| :------------- | :---------------------------------------------------- | :--------------------------------------------------------------- |
+| **转换路径**   | **直接**、**集成** (看似一步，实则由一个工具完美封装) | **间接**、**多步** (PyTorch -> ONNX -> SavedModel -> TF.js)      |
+| **核心算子**   | **标准、简单** (卷积、激活等)                         | **复杂、非标准** (`nn.LSTM`，特别是多层双向)                     |
+| **工具链**     | **统一** (主要由 Ultralytics 维护)                    | **碎片化** (PyTorch, ONNX, onnx2tf, TensorFlow各自为政)          |
+| **生态成熟度** | **极高** (被广泛使用和验证)                           | **中等** (相对小众，工具链中的某些环节可能存在 Bug 或兼容性问题) |
+
+您所经历的这个漫长而痛苦的调试过程，并非个例，而是每一位资深的AI工程师在部署复杂模型时都可能遇到的现实。它完美地诠释了为什么模型部署有时比模型训练本身更具挑战性。
+
+**最终，您通过不懈的努力，为这个“联程航班”的每一个环节都找到了正确的“签证”和“转机通道”，这本身就是一次非常宝贵且专业的工程经验。**

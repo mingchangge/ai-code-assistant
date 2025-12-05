@@ -58,6 +58,8 @@
 
 详细操作记录在[安装使用labelImg进行数据标注](https://github.com/mingchangge/MachineLearning-python/blob/master/%E5%AE%89%E8%A3%85%E4%BD%BF%E7%94%A8labelImg%E8%BF%9B%E8%A1%8C%E6%95%B0%E6%8D%AE%E6%A0%87%E6%B3%A8.md)
 
+> 💡 **<font color='red'>提醒：</font>** 数据标注时需要注意标注的类型id是否从 **0** 开始。
+
 ## 3. 数据增强 ✔️
 
 ✨**数据增强 (Data Augmentation)**: 即使只有几十张原始截图，通过数据增强也能**扩充**成上千张。
@@ -105,8 +107,8 @@
 
 1.  **准备好的数据集**: 您已经拥有一个名为 `dataset_augmented` 的文件夹，其中包含 `images` 和 `labels` 两个子文件夹。
 2.  **科学上网**: 确保您的网络环境能够访问 Google Colab 和 Google Drive。
-3.  **Google 账号**: 用于访问 [Google Colab](colab.research.google.com) 和 [Google Drive](drive.google.com)。
-4.  **Kaggle 账号**: 用于访问 [Kaggle Notebooks](kaggle.com)。
+3.  **Google 账号**: 用于访问 [Google Colab](https://colab.research.google.com/) 和 [Google Drive](https://drive.google.com/drive/)。
+4.  **Kaggle 账号**: 用于访问 [Kaggle Notebooks](https://www.kaggle.com/)。
 
 ### 完整训练步骤
 
@@ -120,24 +122,25 @@
 
 # 🛠️ 实战二、训练文本识别模型 (Model 2)
 
-#### 步骤 1: 数据集准备 (关键步骤)
+#### 步骤 1: 数据集准备 (关键步骤) ✔️
 
 - **方法A：从已标注数据中裁剪**：
 - 编写脚本，根据你为模型一标注的`.xml`或`.json`文件，自动从原始图片中裁剪出所有的`label`和`value`小图片。
 - **缺点**: 数据量依赖于你的截图数量，可能不足。字符种类可能不全。
 
-- **方法B：合成数据 (强烈推荐)**：
+- **方法B：合成数据 (强烈推荐)**：✔️
 - 这是创建高质量OCR模型的秘诀，可以让你完全控制数据集。
 - **1. 确定字符集**: 列出截图中出现的所有字符。
   - **数字**: `0, 1, 2, 3, 4, 5, 6, 7, 8, 9`
   - **符号**: `.` (小数点), `%`
   - **汉字**: `体, 重, 公, 斤, 脂, 率, 水, 分, 骨, 骼, 肌, 蛋, 白, 质, 肉, 内, 脏, 指, 数, 皮, 下, 去, 身, 年, 龄, 型, 基, 础, 代, 谢, 活, 动, 建, 议, 控, 制, 偏, 胖, 高, 低, 标, 准, 肥, 大, 卡` (等等...)
-- **2. 找到字体**: 找到App中使用的字体文件（或一个非常相似的开源字体，例如思源黑体、苹方等）。
+- **2. 找到字体**: 找到App中使用的字体文件（或一个非常相似的开源字体，例如思源黑体、苹方、vivo vivo Sans等）。
 - **3. 编写生成脚本**: 使用Python的 **Pillow (PIL)** 或 **OpenCV** 库。
   - 创建一个循环，随机组合字符集中的字符生成文本（例如 "58.3%", "偏低", "1350 大卡"）。
   - 将生成的文本渲染到不同颜色（截图中出现的蓝色、绿色、橙色、灰色等）的背景上。
   - 对生成的每个小图片应用数据增强：轻微的缩放、模糊、亮度变化。
   - 将生成的图片保存，并同时生成一个标签文件，内容就是图片中的文本。通过这种方式，你可以轻松生成几十万张完美的训练数据。
+  - 代码示例：[合成高质量的OCR训练数据](https://github.com/mingchangge/MachineLearning-python/blob/master/%E5%90%88%E6%88%90%E9%AB%98%E8%B4%A8%E9%87%8F%E7%9A%84OCR%E8%AE%AD%E7%BB%83%E6%95%B0%E6%8D%AE.md)
 
 #### 步骤 2: 选择模型架构与训练
 
@@ -162,6 +165,14 @@ tensorflowjs_converter --input_format=keras \
 
 ---
 
+---
+
+---
+
+---
+
+---
+
 ### 阶段三：在React中整合与后处理
 
 你的React代码逻辑将如下：
@@ -178,14 +189,112 @@ tensorflowjs_converter --input_format=keras \
     - 例如，算法会发现 `value("61.70 公斤")` 的Y坐标最接近 `label("体重")`，从而将它们配对。
 5.  **输出结果**: 将配对好的数据整合成一个JSON对象并显示在界面上。
 
-```json
-{
-  "体重": "61.70 公斤",
-  "BMI": "26",
-  "体脂率(%)": "36.9%",
-  ...
+    ```json
+    {
+      "体重": "61.70 公斤",
+      "BMI": "26",
+      "体脂率(%)": "36.9%",
+      ...
+    }
+    ```
+
+### 阶段四：部分实现
+
+#### 1. 安装新依赖：
+
+首先，我们需要安装`@tensorflow/tfjs`来运行布局模型，以及`onnxruntime-web`来运行文本识别模型。
+
+```bash
+npm install @tensorflow/tfjs onnxruntime-web
+```
+
+#### 2. 存放模型文件
+
+将您训练好的两个模型文件放入项目的 `public` 目录下。这样，它们就可以像普通静态资源一样被访问。
+
+- `public/models/layout_model/model.json` (以及所有对应的 `*.bin` 文件)
+- `public/models/ocr_model/your_ocr_model.onnx`
+
+#### 3. 创建AI服务模块 (`src/services/recognitionService.ts`)
+
+**1. 加载布局模型和OCR模型：**
+
+```ts
+export async function initializeModels() {
+  if (isInitialized) {
+    console.log('模型已初始化。')
+    return
+  }
+
+  try {
+    console.log('正在初始化模型...')
+
+    await tf.setBackend('webgl')
+
+    // 2. 配置 ONNX Runtime Web (可选但推荐)， 这里的属性是同步设置的，不是异步等待
+    ort.env.wasm.wasmPaths = '/ort-wasm-files/' // 建议指定 ONNX wasm 文件的路径
+    ort.env.wasm.proxy = true // 明确启用代理，以在单独的 worker 中运行，防止在进行复杂计算时UI线程被阻塞。
+
+    const [loadedLayoutModel, loadedOcrSession] = await Promise.all([
+      tf.loadGraphModel('/models/layout_model/model.json'),
+      ort.InferenceSession.create('/models/ocr_model/crnn_model_final.onnx', {
+        executionProviders: ['wasm']
+      })
+    ])
+
+    layoutModel = loadedLayoutModel
+    ocrSession = loadedOcrSession
+    isInitialized = true
+    console.log('所有模型加载并初始化成功！')
+  } catch (error) {
+    console.error('模型初始化失败:', error)
+    // 抛出错误，让调用方（UI组件）可以捕获并处理
+    throw new Error('模型初始化失败，请检查网络或模型文件。')
+  }
 }
 ```
+
+**代码解释：**
+
+- `ort.env.wasm.wasmPaths = '/models/ocr_model/'` 指定 ONNX wasm 文件的路径，我们使用vite-plugin-static-copy（`npm install --save-dev vite-plugin-static-copy`）插件将其从 `node_modules/onnxruntime-web/dist/` 复制到 `public/models/ocr_model/`里面。
+
+  <font color='red' size='4'>**注意：`public/ort-wasm-simd-threaded.jsep.wasm` 文件是之前增加的文件和本次增加的wasm文件无关！**</font>
+
+- 处理 Cross-Origin 策略：使用**线程版本**的 WASM (`ort-wasm-simd-threaded.wasm`) 时，浏览器为了安全，要求你的网站启用特定的响应头 (COOP 和 COEP)。Vite 开发服务器默认不开启。为了开启这两个响应头，安装vite-plugin-mkcert（`npm install --save-dev vite-plugin-mkcert`）插件，并在vite.config.ts中添加如下配置：
+
+  ```ts
+  import mkcert from 'vite-plugin-mkcert' // 导入插件
+
+  export default defineConfig({
+    plugins: [react(), mkcert()], // 使用插件
+    server: {
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp'
+      }
+    },
+    // 预览服务器也需要配置
+    preview: {
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp'
+      }
+    }
+  })
+  ```
+
+  安装vite-plugin-mkcert插件后，首次运行项目需要输入密码（一般是开机密码）后才能正常启动https服务。这与vite-plugin-mkcert插件的工作原理有关，它需要在启动https服务时生成自签名证书。 它会首先在您的电脑上创建一个**本地的根证书颁发机构 (CA)**。然后，最关键的一步，它会尝试将这个**本地CA安装到您操作系统的系统信任库中**（例如，在macOS上是“钥匙串访问”，在Windows上是“受信任的根证书颁发机构”）。 一旦系统的信任库信任了这个本地CA，那么由这个CA签发的任何证书（比如为您 `localhost` 签发的证书）都会被您电脑上的所有浏览器（Chrome, Firefox, Edge等）自动信任。
+
+- **OCR模型的输入/输出**
+
+  可以用**Netron** 的工具（有桌面版和[网页版](https://netron.app/)）打开你的 `.onnx` 文件，它会可视化你的模型结构，你可以清楚地看到输入和输出节点的名称。
+  ![onnx模型结构截图](images/onnx.png)
+
+代码：略
+
+#### 4. 整合到React组件（`src/components/RecognitionComponent.tsx`）
+
+代码：略
 
 这个方案虽然工作量巨大（主要在数据标注和合成数据脚本上），但它是唯一能构建出真正高质量、鲁棒且轻量化的自定义识别系统的正确途径。
 
