@@ -87,7 +87,13 @@ export const exportRecordsToFile = async () => {
  */
 export const importRecordsFromFile = async (file: File): Promise<number> => {
   const fileContent = await file.text()
-  const fileData = JSON.parse(fileContent) as MetricsFileData
+  let fileData: MetricsFileData
+  try {
+    fileData = JSON.parse(fileContent) as MetricsFileData
+    console.log('解析后的文件数据:', fileData)
+  } catch {
+    throw new Error('JSON 解析失败')
+  }
 
   if (!Array.isArray(fileData.records)) {
     throw new Error('文件格式无效')

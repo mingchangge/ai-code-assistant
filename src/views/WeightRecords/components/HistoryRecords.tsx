@@ -35,7 +35,7 @@ import {
   getAllRecordsFromDB
 } from '@/utils/indexedDbHandler'
 
-type UploadChangeParam = Parameters<NonNullable<UploadProps['onChange']>>[0]
+// type UploadChangeParam = Parameters<NonNullable<UploadProps['onChange']>>[0]
 type TableRowSelection<T extends object = object> =
   TableProps<T>['rowSelection']
 export interface HistoryRecordsRef {
@@ -152,6 +152,7 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
       Partial<BodyMetricsRecord>
     >({})
     const [isLoading, setIsLoading] = useState(false)
+    const [isImporting, setIsImporting] = useState(false)
     const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
 
     // 当前编辑记录变化时更新表单数据
@@ -328,27 +329,34 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
       }
     }
     // 处理导入文件
-    const handleImportFile = async (info: UploadChangeParam) => {
-      if (info.file.status !== 'done' || !info.file.originFileObj) return
-
+    const handleImportFile = async (file: File) => {
+      console.log('导入文件:', file)
+      setIsImporting(true)
       try {
-        const importedCount = await importRecordsFromFile(
-          info.file.originFileObj
-        )
+        const importedCount = await importRecordsFromFile(file)
         await refreshRecords()
         message.success(`成功导入 ${importedCount.toString()} 条记录`)
       } catch (err) {
         message.error('导入失败：文件格式无效')
-        console.error('导入失败:', err)
+        console.error(err)
+      } finally {
+        setIsImporting(false)
       }
     }
     // 上传组件配置（用于导入）
     const importUploadProps: UploadProps = {
       name: 'file',
       accept: '.json',
+      multiple: false, // 允许用户一次选多个文件时设为 true，这里强制单文件
+      maxCount: 1, // AntD 4.17+ 支持：超过 1 个会自动把旧的替换掉
       showUploadList: false,
       beforeUpload: () => false, // 阻止自动上传
-      onChange: void handleImportFile
+      onChange: info => {
+        // 2. 只拿最新这一次选中的文件
+        const rawFile = info.file as unknown as File
+        console.log('上传文件:', rawFile, info)
+        void handleImportFile(rawFile) // 直接传 File 对象
+      }
     }
     // 处理导出文件
     const handleExportFile = async () => {
@@ -365,9 +373,42 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
         console.error('导出失败:', err)
       }
     }
+    const btnArray = () => (
+      <div>
+        <Space size="middle">
+          <Button
+            variant="outlined"
+            color="primary"
+            icon={<ReloadOutlined />}
+            onClick={() => void refreshRecords()}
+          >
+            刷新
+          </Button>
+          <Upload {...importUploadProps}>
+            <Button
+              icon={<UploadOutlined />}
+              variant="outlined"
+              color="purple"
+              loading={isImporting}
+            >
+              导入
+            </Button>
+          </Upload>
+          <Button
+            icon={<DownloadOutlined />}
+            variant="outlined"
+            color="cyan"
+            onClick={() => void handleExportFile()}
+          >
+            导出
+          </Button>
+        </Space>
+      </div>
+    )
     if (records.length === 0) {
       return (
         <Card title="历史数据管理" variant="outlined">
+          <div style={{ textAlign: 'right' }}>{btnArray()}</div>
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
             <Paragraph type="secondary">暂无身体指标记录</Paragraph>
             <Text type="secondary">
@@ -420,35 +461,7 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
                 </Space>
               </div>
             )}
-            <div>
-              <Space size="middle">
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  icon={<ReloadOutlined />}
-                  onClick={() => void refreshRecords()}
-                >
-                  刷新
-                </Button>
-                <Upload {...importUploadProps}>
-                  <Button
-                    icon={<UploadOutlined />}
-                    variant="outlined"
-                    color="purple"
-                  >
-                    导入
-                  </Button>
-                </Upload>
-                <Button
-                  icon={<DownloadOutlined />}
-                  variant="outlined"
-                  color="cyan"
-                  onClick={() => void handleExportFile()}
-                >
-                  导出
-                </Button>
-              </Space>
-            </div>
+            {btnArray()}
           </div>
 
           <Table
@@ -720,8 +733,8 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
                     ) : (
                       <InputNumber
                         value={editFormData[key] as number}
-                        onChange={val => {
-                          handleFormChange(key, val ?? undefined)
+                        onChange={value => {
+                          handleFormChange(key, value)
                         }}
                         placeholder={`请输入${label}`}
                         style={{ width: '100%' }}
