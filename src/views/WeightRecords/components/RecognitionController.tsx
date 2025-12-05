@@ -1,16 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button, Progress, Space, message } from 'antd'
 import { SyncOutlined } from '@ant-design/icons'
-import type { BodyMetrics } from './types'
-import Tesseract from 'tesseract.js'
+// 导入我们的服务和类型
+import { initializeModels, runRecognition } from '@/services/recognitionService'
+import type { RecognitionResult } from './types'
 
 interface RecognitionControllerProps {
   isRecognizing: boolean
   selectedImage: string | null
-  sendRecognizedData: (data: {
-    rawText: string
-    parsedData: BodyMetrics
-  }) => void
+  // 更新sendRecognizedData的类型签名
+  sendRecognizedData: (data: RecognitionResult) => void
   sendIsRecognizing: (isRecognizing: boolean) => void
 }
 
@@ -20,164 +19,59 @@ const RecognitionController = ({
   sendRecognizedData,
   sendIsRecognizing
 }: RecognitionControllerProps) => {
-  const [progress, setProgress] = useState<number>(0)
+  const [modelsLoaded, setModelsLoaded] = useState<boolean>(false)
+  const [loadingMessage, setLoadingMessage] =
+    useState<string>('正在加载AI模型...')
 
-  // 解析OCR文本
-  const parseOcrText = (text: string) => {
-    const data: BodyMetrics = {
-      date: '',
-      weight: undefined,
-      bmi: undefined,
-      bodyFatRate: undefined,
-      waterRate: undefined,
-      skeletalMuscleRate: undefined,
-      boneRatio: undefined,
-      proteinRate: undefined,
-      muscleRate: undefined,
-      visceralFatIndex: undefined,
-      subcutaneousFat: undefined,
-      leanBodyMass: undefined,
-      bodyAge: undefined,
-      basalMetabolism: undefined,
-      activeMetabolism: undefined,
-      targetWeight: undefined,
-      weightControl: undefined,
-      fatControl: undefined,
-      muscleControl: undefined,
-      bodyType: ''
-    }
+  // 在组件挂载时，只调用一次模型初始化函数
+  useEffect(() => {
+    initializeModels()
+      .then(() => {
+        setModelsLoaded(true)
+      })
+      .catch((error: unknown) => {
+        console.error(error)
+        setLoadingMessage('模型加载失败，请刷新页面。')
+        message.error(error instanceof Error ? error.message : String(error))
+      })
+  }, []) // 空依赖数组确保只运行一次
 
-    // 关键字映射表
-    const keywordMap: Record<string, keyof BodyMetrics> = {
-      体重: 'weight',
-      BMl: 'bmi', // 兼容可能的OCR识别错误
-      BMI: 'bmi',
-      体脂率: 'bodyFatRate',
-      水分率: 'waterRate',
-      骨骼肌率: 'skeletalMuscleRate',
-      骨骼率: 'boneRatio',
-      蛋白质率: 'proteinRate',
-      肌肉率: 'muscleRate',
-      内脏脂肪指数: 'visceralFatIndex',
-      皮下脂肪: 'subcutaneousFat',
-      去脂体重: 'leanBodyMass',
-      身体年龄: 'bodyAge',
-      基础代谢: 'basalMetabolism',
-      活动代谢: 'activeMetabolism',
-      建议体重: 'targetWeight',
-      目标体重: 'targetWeight',
-      体重控制: 'weightControl',
-      脂肪控制: 'fatControl',
-      肌肉控制: 'muscleControl',
-      体型: 'bodyType'
-    }
-
-    // 提取数字
-    const matchNumber = (str: string): number | undefined => {
-      // 预处理：去除所有空格和非数字相关的特殊字符
-      const cleaned = str.replace(/[^\d.-]/g, '')
-      // 处理可能的多个小数点（只保留第一个）
-      const dotIndex = cleaned.indexOf('.')
-      const normalized =
-        dotIndex !== -1
-          ? cleaned.substring(0, dotIndex + 1) +
-            cleaned.substring(dotIndex + 1).replace(/\./g, '')
-          : cleaned
-
-      const regex = /-?\d+(\.\d+)?/
-      const match = regex.exec(normalized)
-
-      if (match) {
-        const num = parseFloat(match[0])
-        return isNaN(num) ? undefined : num
-      }
-      return undefined
-    }
-
-    const lines = text.split('\n')
-
-    lines.forEach(line => {
-      const cleanLine = line.replace(/\s+/g, '')
-
-      // 提取日期
-      const dateMatch = /(\d{4})-(\d{2})-(\d{2})/.exec(cleanLine)
-      if (!data.date && dateMatch) {
-        data.date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`
-      } else if (!data.date) {
-        // 尝试匹配 月/日 格式
-        const monthDayMatch = /(\d{2})月(\d{2})日/.exec(cleanLine)
-        if (monthDayMatch) {
-          const year = new Date().getFullYear()
-          data.date = `${year.toString()}-${monthDayMatch[1]}-${monthDayMatch[2]}`
-        }
-      }
-
-      // 匹配关键字并提取数据
-      for (const keyword in keywordMap) {
-        if (cleanLine.startsWith(keyword)) {
-          const dataKey = keywordMap[keyword]
-          const valueStr = cleanLine.substring(keyword.length)
-
-          if (dataKey === 'bodyType') {
-            data.bodyType = valueStr.replace(/型$/, '').trim() + '型'
-          } else {
-            let value = matchNumber(valueStr)
-
-            if (value !== undefined) {
-              // 数据清洗与纠错
-              if (dataKey === 'bmi' && value > 50) {
-                value /= 10 // 处理可能的小数点识别错误
-              }
-              if (
-                (String(dataKey).includes('Rate') ||
-                  String(dataKey).includes('率')) &&
-                value > 100
-              ) {
-                value /= 10 // 处理百分比可能的识别错误
-              }
-              data[dataKey] = value
-            }
-          }
-          break
-        }
-      }
-    })
-    console.log('data', data)
-    return data
-  }
-  // 处理识别操作
-  const onRecognize = () => {
-    setProgress(0)
+  // 处理识别操作的函数现在非常简洁
+  const onRecognize = async () => {
     if (!selectedImage) {
       message.warning('请先上传图片')
       return
     }
 
-    // 发送识别开始信号
     sendIsRecognizing(true)
 
-    // 调用Tesseract.js进行识别
-    Tesseract.recognize(selectedImage, 'chi_sim', {
-      logger: m => {
-        if (m.status === 'recognizing text') {
-          setProgress(Math.floor(m.progress * 100))
-        }
-      }
-    })
-      .then(({ data: { text } }) => {
-        const parsed = parseOcrText(text)
-        sendRecognizedData({ rawText: text, parsedData: parsed })
-        message.success('识别成功')
-      })
-      .catch((err: unknown) => {
-        console.error('识别失败:', err instanceof Error ? err.message : err)
-        message.error('识别失败，请重试')
-      })
-      .finally(() => {
-        sendIsRecognizing(false)
-        setProgress(100)
-      })
+    try {
+      // 只需调用一行服务函数！
+      const result: RecognitionResult = await runRecognition(selectedImage)
+      sendRecognizedData(result)
+      message.success('识别成功')
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      console.error('识别失败:', errorMessage)
+      message.error(`识别失败: ${errorMessage}`)
+    } finally {
+      sendIsRecognizing(false)
+    }
   }
+
+  // --- UI部分 ---
+
+  // 如果模型正在加载，显示加载状态
+  if (!modelsLoaded) {
+    return (
+      <Space direction="vertical" align="center" style={{ width: '100%' }}>
+        <SyncOutlined spin style={{ fontSize: '24px', color: '#1677ff' }} />
+        <span>{loadingMessage}</span>
+      </Space>
+    )
+  }
+
+  // 模型加载完毕后，显示识别按钮
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -185,19 +79,16 @@ const RecognitionController = ({
           type="primary"
           size="large"
           icon={isRecognizing ? <SyncOutlined spin /> : undefined}
-          onClick={onRecognize}
+          onClick={() => void onRecognize()}
           disabled={!selectedImage || isRecognizing}
         >
-          {isRecognizing ? `识别中... ${progress.toString()}%` : '开始识别'}
+          {isRecognizing ? '智能识别中...' : '开始识别'}
         </Button>
       </div>
 
-      {/* 进度条：仅在识别中显示 */}
+      {/* 识别中的进度条，因为自定义模型速度很快，可以考虑用不确定进度的加载条 */}
       {isRecognizing && (
-        <Progress
-          percent={progress}
-          status={progress === 100 ? 'success' : 'active'}
-        />
+        <Progress percent={50} status="active" showInfo={false} />
       )}
     </Space>
   )

@@ -59,3 +59,13 @@ export interface TableColumn {
     record: TableItem
   ) => React.ReactNode
 }
+export interface BoundingBox {
+  label: 'label' | 'value'
+  box: [number, number, number, number] // [x1, y1, x2, y2]
+  text?: string
+}
+
+export interface RecognitionResult {
+  rawText: string
+  parsedData: BodyMetrics
+}
