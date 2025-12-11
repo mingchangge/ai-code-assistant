@@ -40,7 +40,7 @@
 ### 1. 压缩并上传数据集
 
 - 在您的**本地电脑**上，将整个数据集 `dataset_augmented` 文件夹压缩成一个 `.zip` 文件。mac用户可以使用`zip -r dataset_augmented.zip dataset_augmented`命令，前提是先 `cd` 到`dataset_augmented`文件夹所在目录🗜️。
-- 在 [Google Drive](drive.google.com) 的主目录中（通常，打开后默认就在主目录），上传这个 `dataset_augmented.zip` 文件（将 dataset_augmented.zip 文件直接用鼠标拖拽到 Google Drive 的浏览器窗口的文件列表区域）。通过浏览器上传单个大文件远比上传成千上万个小文件要快⚡。
+- 在 [Google Drive](https://drive.google.com/) 的主目录中（通常，打开后默认就在主目录），上传这个 `dataset_augmented.zip` 文件（将 dataset_augmented.zip 文件直接用鼠标拖拽到 Google Drive 的浏览器窗口的文件列表区域）。通过浏览器上传单个大文件远比上传成千上万个小文件要快⚡。
 - 确保您的 `dataset_augmented.zip` 文件已成功上传到 Google Drive 的主目录，检查 Colab Notebook 中是否能看到这个文件✔️。
 
 ### 2. 在 Colab 中解压数据集
