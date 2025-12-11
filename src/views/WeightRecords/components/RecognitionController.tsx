@@ -22,6 +22,7 @@ const RecognitionController = ({
   const [modelsLoaded, setModelsLoaded] = useState<boolean>(false)
   const [loadingMessage, setLoadingMessage] =
     useState<string>('正在加载AI模型...')
+  const [debugImage, setDebugImage] = useState<string | null>(null)
 
   // 在组件挂载时，只调用一次模型初始化函数
   useEffect(() => {
@@ -47,9 +48,16 @@ const RecognitionController = ({
 
     try {
       // 只需调用一行服务函数！
-      const result: RecognitionResult = await runRecognition(selectedImage)
+      const result: RecognitionResult = await runRecognition(
+        selectedImage,
+        true
+      )
       sendRecognizedData(result)
       message.success('识别成功')
+      // 如果返回了调试图片URL，就设置它
+      if (result.debugImageUrl) {
+        setDebugImage(result.debugImageUrl)
+      }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       console.error('识别失败:', errorMessage)
@@ -85,7 +93,17 @@ const RecognitionController = ({
           {isRecognizing ? '智能识别中...' : '开始识别'}
         </Button>
       </div>
-
+      {/* 在这里显示调试图片！ */}
+      {debugImage && (
+        <div>
+          <h3>布局检测结果可视化：</h3>
+          <img
+            src={debugImage}
+            alt="Debug Preview"
+            style={{ maxWidth: '100%' }}
+          />
+        </div>
+      )}
       {/* 识别中的进度条，因为自定义模型速度很快，可以考虑用不确定进度的加载条 */}
       {isRecognizing && (
         <Progress percent={50} status="active" showInfo={false} />

@@ -17,6 +17,7 @@ const OCR_CHARSET =
 
 const OCR_MODEL_INPUT_HEIGHT = 64 // 必须与训练脚本中的 IMAGE_HEIGHT 一致
 const OCR_MODEL_INPUT_WIDTH = 256 // 必须与训练脚本中的 IMAGE_WIDTH 一致
+const FRONTEND_CONFIDENCE_THRESHOLD = 0.5 // 前端显示的置信度阈值，低于此值的框将被过滤掉
 
 // --- 1. 初始化函数 (只执行一次) ---
 export async function initializeModels() {
@@ -51,10 +52,14 @@ export async function initializeModels() {
     throw new Error('模型初始化失败，请检查网络或模型文件。')
   }
 }
+export interface DebugImageResult {
+  debugImageUrl: string
+}
 
 // --- 2. 主识别函数 ---
 export const runRecognition = async (
-  imageUrl: string
+  imageUrl: string,
+  enableDebug = false // 添加一个可选的调试开关
 ): Promise<RecognitionResult> => {
   if (!isInitialized || !layoutModel || !ocrSession) {
     throw new Error('模型尚未初始化，请先调用 initializeModels()。')
@@ -82,8 +87,16 @@ export const runRecognition = async (
   if (boxes.length === 0) {
     throw new Error('布局检测未能识别出任何文本区域。')
   }
+  // --- 【可视化调试的关键步骤】 ---
+  let debugImageUrl: string | undefined = undefined
+  if (enableDebug) {
+    // 创建一张带有检测框的新图片
+    debugImageUrl = drawBoxesOnImage(imageElement, boxes)
+    console.log('调试图片已生成。请在UI中显示它。')
+  }
   const recognizedBoxes = await runOcrOnBoxes(imageElement, boxes)
-  return pairAndParseResults(recognizedBoxes)
+  const result = pairAndParseResults(recognizedBoxes)
+  return { ...result, debugImageUrl }
 }
 
 // --- 3. 内部辅助函数 (不导出) ---
@@ -97,81 +110,84 @@ async function runLayoutDetection(
   imageElement: HTMLImageElement
 ): Promise<BoundingBox[]> {
   const modelInputSize = 640
-  const scoreThreshold = 0.25 // 稍微降低阈值，看看能否捞出一些value框
-  const iouThreshold = 0.45
+  const originalWidth = imageElement.width
+  const originalHeight = imageElement.height
 
-  const tensor = tf.browser
-    .fromPixels(imageElement)
-    .resizeNearestNeighbor([modelInputSize, modelInputSize])
-    .toFloat()
-    .div(tf.scalar(255.0))
-    .expandDims(0)
-
-  const predictions = (await layoutModel!.executeAsync(tensor)) as tf.Tensor[]
-  const outputTensor = Array.isArray(predictions) ? predictions[0] : predictions
-
-  const transposed = outputTensor.squeeze([0]).transpose()
-  const boxesData = (await transposed.array()) as number[][]
-
-  // --- 诊断步骤：打印出原始输出中置信度最高的前10个框 ---
-  console.log('--- 模型原始输出诊断 ---')
-  // 按置信度（索引4）降序排序
-  const sortedBoxesData = [...boxesData].sort((a, b) => b[4] - a[4])
-  console.log(
-    '置信度最高的前10个原始框数据 [cx, cy, w, h, confidence, classId]:'
-  )
-  for (let i = 0; i < 10 && i < sortedBoxesData.length; i++) {
-    // 将classId格式化为保留3位小数，以便观察
-    const formattedData = sortedBoxesData[i].map((val, index) =>
-      index === 5 ? val.toFixed(3) : val
+  // 1. 在前端完美复刻YOLOv8的“信箱填充”预处理 (这部分是正确的，保持不变)
+  const tensor = tf.tidy(() => {
+    const imgTensor = tf.browser.fromPixels(imageElement)
+    const r = Math.min(
+      modelInputSize / originalWidth,
+      modelInputSize / originalHeight
     )
-    console.log(`  - 框 ${i + 1}:`, formattedData)
+    const newUnpadHeight = Math.round(originalHeight * r)
+    const newUnpadWidth = Math.round(originalWidth * r)
+    const resizedTensor = tf.image.resizeBilinear(imgTensor, [
+      newUnpadHeight,
+      newUnpadWidth
+    ])
+    const padTop = Math.round((modelInputSize - newUnpadHeight) / 2)
+    const padBottom = modelInputSize - newUnpadHeight - padTop
+    const padLeft = Math.round((modelInputSize - newUnpadWidth) / 2)
+    const padRight = modelInputSize - newUnpadWidth - padLeft
+    const paddings: [[number, number], [number, number], [number, number]] = [
+      [padTop, padBottom],
+      [padLeft, padRight],
+      [0, 0]
+    ]
+    const paddedTensor = tf.cast(resizedTensor, 'float32').pad(paddings, 114.0)
+    return paddedTensor.div(255.0).expandDims(0)
+  })
+  if (!layoutModel) {
+    throw new Error('布局检测模型未初始化，请先调用 initializeModels()。')
   }
-  console.log('--- 诊断结束 ---')
-  // --- 诊断步骤结束 ---
+  // 2. 模型推理 (保持不变)
+  const predictions = (await layoutModel.executeAsync(tensor)) as tf.Tensor[]
+  const outputTensor = predictions[0]
+  const boxesData = (await outputTensor.array()) as number[][][]
+  const detectedRawBoxes = boxesData[0] || []
 
-  const boxes: [number, number, number, number][] = []
-  const scores: number[] = []
-  const classIds: number[] = []
-
-  for (const boxData of boxesData) {
-    const [cx, cy, w, h, confidence, classId] = boxData
-    if (confidence < scoreThreshold) {
-      continue
-    }
-    const y1 = cy - h / 2
-    const x1 = cx - w / 2
-    const y2 = cy + h / 2
-    const x2 = cx + w / 2
-    boxes.push([y1, x1, y2, x2])
-    scores.push(confidence)
-    classIds.push(classId)
-  }
-
-  const nmsResult = await tf.image.nonMaxSuppressionAsync(
-    tf.tensor2d(boxes),
-    tf.tensor1d(scores),
-    50, // 稍微增加最大输出数量
-    iouThreshold,
-    scoreThreshold
-  )
-
-  const keptIndices = (await nmsResult.array()) as number[]
   const detectedBoxes: BoundingBox[] = []
 
-  const scaleX = imageElement.width / modelInputSize
-  const scaleY = imageElement.height / modelInputSize
+  // --- 3. 【核心修复】: 使用为 [x1, y1, x2, y2] 格式量身定制的、正确的反向逻辑 ---
+  const r_post = Math.min(
+    modelInputSize / originalWidth,
+    modelInputSize / originalHeight
+  )
+  const padX_post = (modelInputSize - Math.round(originalWidth * r_post)) / 2
+  const padY_post = (modelInputSize - Math.round(originalHeight * r_post)) / 2
 
-  for (const index of keptIndices) {
-    const [y1, x1, y2, x2] = boxes[index]
-    const finalClassId = Math.round(classIds[index])
+  for (const boxData of detectedRawBoxes) {
+    // a. 按正确的 [x1, y1, x2, y2, conf, id] 格式解析
+    const [x1_640, y1_640, x2_640, y2_640, confidence, classId] = boxData
+    console.log('原始框:', x1_640, y1_640, x2_640, y2_640, confidence, classId)
+    if (confidence < FRONTEND_CONFIDENCE_THRESHOLD) {
+      continue
+    }
+
+    // b. 从 "640空间" 坐标中减去“黑边”的偏移量
+    const x1_unpad = x1_640 - padX_post
+    const y1_unpad = y1_640 - padY_post
+    const x2_unpad = x2_640 - padX_post
+    const y2_unpad = y2_640 - padY_post
+
+    // c. 将坐标从“缩放空间”还原回“原始图片空间”
+    const x1 = x1_unpad / r_post
+    const y1 = y1_unpad / r_post
+    const x2 = x2_unpad / r_post
+    const y2 = y2_unpad / r_post
+
     detectedBoxes.push({
-      label: finalClassId === 0 ? 'label' : 'value',
-      box: [x1 * scaleX, y1 * scaleY, x2 * scaleX, y2 * scaleY]
+      label: 'text_block',
+      box: [x1, y1, x2, y2]
     })
   }
 
-  tf.dispose([tensor, predictions, outputTensor, transposed, nmsResult])
+  console.log(
+    `经过前端置信度过滤后，保留了 ${detectedBoxes.length.toString()} 个高质量的框`
+  )
+
+  tf.dispose([tensor, ...predictions])
   return detectedBoxes
 }
 
@@ -333,104 +349,106 @@ function matchNumber(str: string): number | undefined {
 }
 
 function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
-  console.log('--- 开始配对与解析 ---')
-  console.log('所有识别出的框:', recognizedBoxes) // 调试日志 1: 查看所有原始结果
-  const labels = recognizedBoxes.filter(b => b.label === 'label')
-  const values = recognizedBoxes.filter(b => b.label === 'value')
-  console.log(`找到了 ${labels.length} 个标签框, ${values.length} 个数值框`) // 调试日志 2: 检查分类是否正确
-  const pairs: Record<string, string> = {}
-  // 步骤2: 解析配对好的数据，应用您的原始逻辑
-  const rawTextLines: string[] = []
+  console.log('--- 开始智能配对与解析 (新逻辑) ---')
+  console.log('所有识别出的文本块:', recognizedBoxes)
 
-  for (const value of values) {
-    const [vx, vy] = value.box
+  const pairs: Record<string, string> = {}
+
+  // 复制一份，用于安全地从中移除已匹配的项
+  const unmatchedBoxes = [...recognizedBoxes]
+
+  // 按从上到下，从左到右的顺序排序，便于处理
+  unmatchedBoxes.sort((a, b) => {
+    if (Math.abs(a.box[1] - b.box[1]) > 10) {
+      // Y坐标差异大，按Y排序
+      return a.box[1] - b.box[1]
+    }
+    return a.box[0] - b.box[0] // Y坐标相近，按X排序
+  })
+
+  // 定义一个关键词列表，帮助我们识别哪些是可能的"name"
+  const nameKeywords = [
+    '体重',
+    'BMI',
+    '体脂率',
+    '水分率',
+    '骨骼肌率',
+    '骨骼率',
+    '蛋白质率',
+    '肌肉率',
+    '内脏脂肪指数',
+    '皮下脂肪',
+    '去脂体重',
+    '身体年龄',
+    '基础代谢',
+    '活动代谢',
+    '建议体重',
+    '体重控制',
+    '脂肪控制',
+    '肌肉控制',
+    '体型'
+  ]
+
+  const potentialNames = unmatchedBoxes.filter(b =>
+    nameKeywords.some(keyword => (b.text ?? '').startsWith(keyword))
+  )
+
+  const potentialValues = new Set(
+    unmatchedBoxes.filter(b => !potentialNames.includes(b))
+  )
+
+  for (const nameBox of potentialNames) {
+    if (!nameBox.text) continue
+
     let bestMatch: BoundingBox | null = null
     let minDistance = Infinity
 
-    // --- 调试日志 3: 检查每个value和它的潜在label匹配情况 ---
-    console.log(
-      `正在为 Value "${value.text}" (坐标 Y: ${vy.toFixed(0)}) 寻找 Label...`
-    )
+    for (const valueBox of potentialValues) {
+      const [nx, ny, nright, nbottom] = nameBox.box
+      const [vx, vy, vright, vbottom] = valueBox.box
 
-    for (const label of labels) {
-      const [lx, ly] = label.box
-      const distance = Math.abs(vy - ly)
+      const nCenterX = nx + (nright - nx) / 2
+      const nCenterY = ny + (nbottom - ny) / 2
+      const vCenterX = vx + (vright - vx) / 2
+      const vCenterY = vy + (vbottom - vy) / 2
 
-      // 打印出所有潜在的匹配项及其诊断信息
-      if (vx > lx) {
-        console.log(
-          `  - 考虑 Label "${label.text}" (坐标 Y: ${ly.toFixed(0)}), 垂直距离: ${distance.toFixed(2)}`
-        )
+      // 规则1：检查是左右结构还是上下结构
+      const isHorizontal = Math.abs(nCenterY - vCenterY) < nbottom - ny // Y轴中心点距离小于name的高度，视为水平
+      const isVertical = Math.abs(nCenterX - vCenterX) < nright - nx // X轴中心点距离小于name的宽度，视为垂直
+
+      let isSpatiallyCorrect = false
+      if (isHorizontal && vCenterX > nCenterX) {
+        // 左右结构
+        isSpatiallyCorrect = true
+      } else if (isVertical && vCenterY > nCenterY) {
+        // 上下结构
+        isSpatiallyCorrect = true
       }
-    }
 
-    // 实际的匹配逻辑 (与之前相同)
-    for (const label of labels) {
-      const [lx, ly] = label.box
-      if (vx > lx) {
-        const distance = Math.abs(vy - ly)
-        if (distance < minDistance && distance < 20) {
-          // 20像素的Y轴容差
+      if (isSpatiallyCorrect) {
+        const distance = Math.sqrt(
+          Math.pow(nCenterX - vCenterX, 2) + Math.pow(nCenterY - vCenterY, 2)
+        )
+        if (distance < minDistance) {
           minDistance = distance
-          bestMatch = label
+          bestMatch = valueBox
         }
       }
     }
-    if (bestMatch?.text && value.text) {
-      // 清理key中的特殊字符，提高匹配率
-      const key = bestMatch.text.replace(/[\s(%)]/g, '')
-      pairs[key] = value.text
-      console.log(`%c成功匹配: { "${key}": "${value.text}" }`, 'color: green') // 调试日志 4: 报告成功匹配
+
+    if (bestMatch?.text) {
+      const key = nameBox.text.replace(/[\s(%)]/g, '')
+      pairs[key] = bestMatch.text
+      potentialValues.delete(bestMatch) // 从待匹配集合中移除
+      console.log(
+        `%c成功匹配: { "${key}": "${bestMatch.text}" }`,
+        'color: green'
+      )
     } else {
       console.log(
-        `%c匹配失败: Value "${value.text}" 未找到合适的 Label.`,
+        `%c匹配失败: Name "${nameBox.text}" 未找到合适的 Value.`,
         'color: red'
-      ) // 调试日志 5: 报告失败
-      if (!bestMatch)
-        console.log(
-          '%c  - 原因: 没有找到几何上足够近的Label。',
-          'color: orange'
-        )
-      if (bestMatch && !bestMatch.text)
-        console.log(
-          `%c  - 原因: 几何匹配成功，但Label "${bestMatch.text}" OCR结果为空。`,
-          'color: orange'
-        )
-      if (bestMatch && !value.text)
-        console.log(
-          `%c  - 原因: 几何匹配成功，但Value "${value.text}" OCR结果为空。`,
-          'color: orange'
-        )
-    }
-  }
-  // 步骤1: 配对Label和Value
-  for (const value of values) {
-    if (!value.text) continue // 跳过没有识别出文本的框
-    const [, vy, , vbottom] = value.box
-    const vCenterY = vy + (vbottom - vy) / 2
-
-    let bestMatch: BoundingBox | null = null
-    let minDistance = Infinity
-
-    // 寻找Y轴中心点最接近的label
-    for (const label of labels) {
-      if (!label.text) continue
-      const [, ly, , lbottom] = label.box
-      const lCenterY = ly + (lbottom - ly) / 2
-
-      const distance = Math.abs(vCenterY - lCenterY)
-
-      // 设置一个合理的Y轴距离阈值，例如框高的1倍
-      const threshold = lbottom - ly
-      if (distance < minDistance && distance < threshold) {
-        minDistance = distance
-        bestMatch = label
-      }
-    }
-    if (bestMatch?.text) {
-      // 清理识别出的key，去除不必要的字符
-      const key = bestMatch.text.replace(/[\s(%)]/g, '')
-      pairs[key] = value.text
+      )
     }
   }
 
@@ -482,7 +500,7 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     肌肉控制: 'muscleControl',
     体型: 'bodyType'
   }
-
+  const rawTextLines: string[] = []
   // 遍历配对好的键值对进行解析
   for (const recognizedKey in pairs) {
     const valueStr = pairs[recognizedKey]
@@ -528,4 +546,46 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
   console.log('最终结构化数据:', data)
 
   return { rawText: rawTextLines.join('\n'), parsedData: data }
+}
+/**
+ * 在图片上绘制边界框用于调试
+ * @param imageElement 原始图片
+ * @param boxes 边界框数组
+ * @returns 带有绘制框的图片的Data URL
+ */
+function drawBoxesOnImage(
+  imageElement: HTMLImageElement,
+  boxes: BoundingBox[]
+): string {
+  const canvas = document.createElement('canvas')
+  canvas.width = imageElement.width
+  canvas.height = imageElement.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return ''
+
+  // 1. 先绘制原始图片
+  ctx.drawImage(imageElement, 0, 0)
+
+  // 2. 遍历所有框并绘制
+  for (const item of boxes) {
+    const [x1, y1, x2, y2] = item.box
+    const width = x2 - x1
+    const height = y2 - y1
+
+    // 随机生成一个颜色，便于区分
+    const color = `#${Math.floor(Math.random() * 16777215).toString(16)}`
+
+    // 绘制矩形框
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2
+    ctx.strokeRect(x1, y1, width, height)
+
+    // （可选）在框旁边写上标签，但我们现在是通用标签，意义不大
+    // ctx.fillStyle = color;
+    // ctx.font = '16px Arial';
+    // ctx.fillText(item.label, x1, y1 > 20 ? y1 - 5 : y1 + 15);
+  }
+
+  // 3. 返回图片的Data URL
+  return canvas.toDataURL('image/jpeg')
 }

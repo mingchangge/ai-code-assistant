@@ -68,4 +68,5 @@ export interface BoundingBox {
 export interface RecognitionResult {
   rawText: string
   parsedData: BodyMetrics
+  debugImageUrl?: string
 }
