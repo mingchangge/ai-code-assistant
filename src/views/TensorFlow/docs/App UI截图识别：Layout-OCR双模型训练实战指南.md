@@ -1,4 +1,4 @@
-# 手机App UI截图识别：Layout-OCR双模型训练实战指南
+# App UI截图识别：Layout-OCR双模型训练实战指南
 
 本文将详细介绍如何针对手机App UI截图，训练两个轻量化自定义模型（布局检测+文本识别），实现结构化GUI信息提取。整体思路为 **“文档/UI布局分析 -> 文本识别”**，因UI截图字体、布局固定，稳定性远超真实世界照片处理~ 🚀
 
@@ -142,7 +142,7 @@
   - 将生成的图片保存，并同时生成一个标签文件，内容就是图片中的文本。通过这种方式，你可以轻松生成几十万张完美的训练数据。
   - 代码示例：[合成高质量的OCR训练数据](https://github.com/mingchangge/MachineLearning-python/blob/master/%E5%90%88%E6%88%90%E9%AB%98%E8%B4%A8%E9%87%8F%E7%9A%84OCR%E8%AE%AD%E7%BB%83%E6%95%B0%E6%8D%AE.md)
 
-#### 步骤 2: 选择模型架构与训练
+#### 步骤 2: 选择模型架构与训练 ✔️
 
 - **模型推荐**: **CRNN (Convolutional Recurrent Neural Network)**。这是OCR任务的黄金标准架构。
 - **卷积层 (CNN)**: 负责从图像中提取视觉特征。
@@ -153,7 +153,7 @@
 - 也可以参考一些开源的轻量级OCR实现，如 [Keras-OCR](https://github.com/faustomorales/keras-ocr) 的模型结构，并在你自己的合成数据集上进行训练。
 - 同样，使用Google Colab进行训练。
 
-#### 步骤 3: 模型转换为 TensorFlow.js 格式
+#### 步骤 3: 模型转换为 TensorFlow.js 格式 ❌
 
 训练完成后，你会得到一个Keras的`.h5`模型。将其转换为TF.js Layers Model。
 
@@ -162,6 +162,8 @@ tensorflowjs_converter --input_format=keras \
   /path/to/your_ocr_model.h5 \
   /path/to/your_tfjs_ocr_model
 ```
+
+google colab 也好，kaggle 也好，他们的环境都是最新的，在将onnx模型转换为tfjs模型时，总是会遇到一些问题。为了解决这些问题，一次又一次的降级依赖版本，然而每次都失败。最后，我只得放弃转换，使用onnx模型直接在浏览器中运行。
 
 ---
 
