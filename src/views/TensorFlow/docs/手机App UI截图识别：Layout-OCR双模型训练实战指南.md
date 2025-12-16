@@ -73,7 +73,7 @@
 
 实操：使用python `Albumentations` 库，项目本地运行命令 `python augment_data.py` 即可。
 
-代码参考：[使用Albumentations进行数据增强代码](https://github.com/mingchangge/MachineLearning-python/blob/master/augment_data.py)
+代码参考：[使用Albumentations进行数据增强代码](https://github.com/mingchangge/MachineLearning-python/blob/master/laoutModel/augment_data_init.py)
 
 ## 4. 模型训练（核心步骤）✔️
 
@@ -157,10 +157,10 @@
 
 训练完成后，你会得到一个Keras的`.h5`模型。将其转换为TF.js Layers Model。
 
-```bash
+```python
 tensorflowjs_converter --input_format=keras \
-                     /path/to/your_ocr_model.h5 \
-                     /path/to/your_tfjs_ocr_model
+  /path/to/your_ocr_model.h5 \
+  /path/to/your_tfjs_ocr_model
 ```
 
 ---
