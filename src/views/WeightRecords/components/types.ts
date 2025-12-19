@@ -69,4 +69,5 @@ export interface RecognitionResult {
   rawText: string
   parsedData: BodyMetrics
   debugImageUrl?: string
+  boxesForCropping?: BoundingBox[]
 }

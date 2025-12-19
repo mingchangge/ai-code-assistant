@@ -1,19 +1,19 @@
 import * as tf from '@tensorflow/tfjs'
 import * as ort from 'onnxruntime-web'
+import JSZip from 'jszip'
+import { saveAs } from 'file-saver' // 用于触发下载
 import type {
   BoundingBox,
   BodyMetrics,
   RecognitionResult
 } from '@/views/WeightRecords/components/types'
 
+// --- 定义全局变量来存储新的字符集信息 ---
+let intToChar = new Map<number, string>()
+
 // --- 模块级变量，用于存储加载的模型和状态 ---
 let layoutModel: tf.GraphModel | null = null
 let ocrSession: ort.InferenceSession | null = null
-let isInitialized = false
-
-// OCR字符集 - 必须与你训练OCR模型时使用的字符集完全一致！
-const OCR_CHARSET =
-  '0123456789.%BMI对比上次测量体重公斤脂肪率水分骨骼肌蛋白质肉内脏指数皮下去身年龄型基础代谢活动建议控制偏胖高低标准肥大卡隐形微稍瘦强壮过力发达'
 
 const OCR_MODEL_INPUT_HEIGHT = 64 // 必须与训练脚本中的 IMAGE_HEIGHT 一致
 const OCR_MODEL_INPUT_WIDTH = 256 // 必须与训练脚本中的 IMAGE_WIDTH 一致
@@ -21,8 +21,8 @@ const FRONTEND_CONFIDENCE_THRESHOLD = 0.5 // 前端显示的置信度阈值，�
 
 // --- 1. 初始化函数 (只执行一次) ---
 export async function initializeModels() {
-  if (isInitialized) {
-    console.log('模型已初始化。')
+  if (layoutModel && ocrSession && intToChar.size > 0) {
+    console.log('模型和字符集已初始化。')
     return
   }
 
@@ -30,21 +30,29 @@ export async function initializeModels() {
     console.log('正在初始化模型...')
 
     await tf.setBackend('webgl')
-
+    const modelDir = '/models/ocr_model/'
+    const charsetPath = `${modelDir}charset.txt` // <-- 指向新的字符集文件!
     // 2. 配置 ONNX Runtime Web (可选但推荐)， 这里的属性是同步设置的，不是异步等待
     ort.env.wasm.wasmPaths = '/models/ocr_model/' // 建议指定 ONNX wasm 文件的路径
     ort.env.wasm.proxy = true // 明确启用代理，以在单独的 worker 中运行，防止在进行复杂计算时UI线程被阻塞。
 
-    const [loadedLayoutModel, loadedOcrSession] = await Promise.all([
-      tf.loadGraphModel('/models/layout_model/model.json'),
-      ort.InferenceSession.create('/models/ocr_model/crnn_model_final.onnx', {
-        executionProviders: ['wasm']
-      })
-    ])
+    const [loadedLayoutModel, loadedOcrSession, charsetContent] =
+      await Promise.all([
+        tf.loadGraphModel('/models/layout_model_finetune/model.json'),
+        ort.InferenceSession.create('/models/ocr_model/crnn_model_final.onnx', {
+          executionProviders: ['wasm']
+        }),
+        fetch(charsetPath).then(res => res.text())
+      ])
 
     layoutModel = loadedLayoutModel
     ocrSession = loadedOcrSession
-    isInitialized = true
+    // 解析字符集文件并创建映射表
+    // PyTorch的CTCLoss blank token 在索引0，所以我们从1开始
+    // 但我们的Python脚本保存的charset.txt已经去掉了blank，所以直接用即可
+    const characters = charsetContent.split('')
+    intToChar = new Map(characters.map((char, index) => [index + 1, char])) // +1是因为0是blank
+    console.log(`✅ 字符集加载成功，共 ${intToChar.size.toString()} 个字符。`)
     console.log('所有模型加载并初始化成功！')
   } catch (error) {
     console.error('模型初始化失败:', error)
@@ -60,8 +68,8 @@ export interface DebugImageResult {
 export const runRecognition = async (
   imageUrl: string,
   enableDebug = false // 添加一个可选的调试开关
-): Promise<RecognitionResult> => {
-  if (!isInitialized || !layoutModel || !ocrSession) {
+): Promise<RecognitionResult & { boxesForCropping: BoundingBox[] }> => {
+  if (!layoutModel || !ocrSession) {
     throw new Error('模型尚未初始化，请先调用 initializeModels()。')
   }
 
@@ -82,21 +90,22 @@ export const runRecognition = async (
 
   const imageElement = await loadImageElement(imageUrl)
 
-  // 完整的识别流程
+  // OCR识别
   const boxes = await runLayoutDetection(imageElement)
   if (boxes.length === 0) {
     throw new Error('布局检测未能识别出任何文本区域。')
   }
   // --- 【可视化调试的关键步骤】 ---
-  let debugImageUrl: string | undefined = undefined
-  if (enableDebug) {
-    // 创建一张带有检测框的新图片
-    debugImageUrl = drawBoxesOnImage(imageElement, boxes)
-    console.log('调试图片已生成。请在UI中显示它。')
-  }
+  // let debugImageUrl: string | undefined = undefined
+  // if (enableDebug) {
+  //   // 创建一张带有检测框的新图片
+  //   debugImageUrl = drawBoxesOnImage(imageElement, boxes)
+  //   console.log('调试图片已生成。请在UI中显示它。')
+  // }
   const recognizedBoxes = await runOcrOnBoxes(imageElement, boxes)
+  // 配对与解析
   const result = pairAndParseResults(recognizedBoxes)
-  return { ...result, debugImageUrl }
+  return { ...result, boxesForCropping: boxes }
 }
 
 // --- 3. 内部辅助函数 (不导出) ---
@@ -113,7 +122,7 @@ async function runLayoutDetection(
   const originalWidth = imageElement.width
   const originalHeight = imageElement.height
 
-  // 1. 在前端完美复刻YOLOv8的“信箱填充”预处理 (这部分是正确的，保持不变)
+  // 1. 在前端完美复刻YOLOv8的“信箱填充”预处理
   const tensor = tf.tidy(() => {
     const imgTensor = tf.browser.fromPixels(imageElement)
     const r = Math.min(
@@ -149,7 +158,7 @@ async function runLayoutDetection(
 
   const detectedBoxes: BoundingBox[] = []
 
-  // --- 3. 【核心修复】: 使用为 [x1, y1, x2, y2] 格式量身定制的、正确的反向逻辑 ---
+  // 3. 使用为 [x1, y1, x2, y2] 格式量身定制的、正确的反向逻辑
   const r_post = Math.min(
     modelInputSize / originalWidth,
     modelInputSize / originalHeight
@@ -201,94 +210,54 @@ const runOcrOnBoxes = async (
   imageElement: HTMLImageElement,
   boxes: BoundingBox[]
 ): Promise<BoundingBox[]> => {
-  const canvas = document.createElement('canvas')
+  if (!ocrSession) throw new Error('OCR模型未初始化')
 
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    throw new Error('无法创建2D渲染上下文。')
-  }
-  const ocrPromises = boxes.map(async item => {
+  const ocrInputHeight = OCR_MODEL_INPUT_HEIGHT
+  const ocrInputWidth = OCR_MODEL_INPUT_WIDTH
+  const recognizedBoxes: BoundingBox[] = []
+
+  for (const item of boxes) {
     const [x1, y1, x2, y2] = item.box
     const width = x2 - x1
     const height = y2 - y1
 
-    // 使用canvas裁剪出小图
+    const canvas = document.createElement('canvas')
     canvas.width = width
     canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      throw new Error('无法获取2D上下文')
+    }
     ctx.drawImage(imageElement, x1, y1, width, height, 0, 0, width, height)
 
-    // OCR预处理
-    const ocrInputHeight = OCR_MODEL_INPUT_HEIGHT
-    const OCR_MODEL_FIXED_WIDTH = OCR_MODEL_INPUT_WIDTH
-    // 将Canvas内容转换为Tensor
-    const imgTensor = tf.browser.fromPixels(canvas)
-
-    // 手动实现RGB到灰度的转换
-    const grayscaleTensor = tf.tidy(() => {
-      // 1. 定义RGB权重
-      const rgbWeights = tf.tensor1d([0.299, 0.587, 0.114])
-      // 2. 使用 mul (带广播) 和 sum 实现加权求和
-      // mul: [H, W, 3] * [3] -> [H, W, 3]
-      // sum: 沿着最后一个轴(-1)求和 -> [H, W]
-      return imgTensor.toFloat().mul(rgbWeights).sum(-1).expandDims(-1)
-    })
-    const processedTensor = tf.tidy(() => {
-      // 1. 等比缩放，但不限制最大宽度
-      const targetWidth = Math.floor(width * (ocrInputHeight / height))
-      const resizedTensor = grayscaleTensor.resizeBilinear([
+    const tensor = tf.tidy(() => {
+      let imgTensor = tf.browser.fromPixels(canvas, 1) // 初始形状: [H, W, C] = [64, 256, 1]
+      imgTensor = tf.image.resizeBilinear(imgTensor, [
         ocrInputHeight,
-        targetWidth
+        ocrInputWidth
       ])
+      const expandedTensor = imgTensor.toFloat().div(255.0).expandDims(0) // 形状: [B, H, W, C] = [1, 64, 256, 1]
 
-      // 2. 计算需要填充的宽度
-      const paddingWidth = OCR_MODEL_FIXED_WIDTH - targetWidth
-
-      // 3. 如果计算出的宽度超过了固定宽度，就直接把它缩放到固定宽度
-      if (paddingWidth < 0) {
-        return resizedTensor.resizeBilinear([
-          ocrInputHeight,
-          OCR_MODEL_FIXED_WIDTH
-        ])
-      }
-
-      // 4. 定义填充量: [[top, bottom], [left, right]]
-      // 我们只在右侧填充
-      const paddings: [number, number][] = [
-        [0, 0],
-        [0, paddingWidth],
-        [0, 0]
-      ]
-
-      // 5. 执行填充。-1 表示用归一化后的黑色填充
-      // 归一化是 /127.5 - 1，所以 (0 / 127.5 - 1) = -1
-      return resizedTensor.pad(paddings, -1)
-    })
-    // 继续后续的预处理
-    const ocrTensor = tf.tidy(() => {
-      return processedTensor
-        .div(tf.scalar(127.5))
-        .sub(tf.scalar(1.0))
-        .transpose([2, 0, 1])
-        .expandDims(0)
+      // 【关键修复】: 使用 tf.transpose 重新排列维度
+      // 将 HWC 格式 [0, 1, 2, 3] -> [1, 64, 256, 1]
+      // 转换为 CHW 格式 [0, 3, 1, 2] -> [1, 1, 64, 256]
+      return expandedTensor.transpose([0, 3, 1, 2])
     })
 
-    const ocrFeed = {
-      input: new ort.Tensor('float32', await ocrTensor.data(), ocrTensor.shape)
+    const feed = {
+      image: new ort.Tensor('float32', tensor.dataSync(), tensor.shape)
     }
 
-    const results = await ocrSession?.run(ocrFeed)
-    const outputTensor = results?.output
+    const results = await ocrSession.run(feed)
+    const outputTensor = results.output
 
-    // 解码OCR输出 (CTC Greedy Decode)
-    if (!outputTensor) {
-      throw new Error('OCR模型输出为空')
-    }
-    const text = decodeOcrOutput(outputTensor)
-    tf.dispose(ocrTensor)
-    return { ...item, text }
-  })
+    const text = decodeOcrPrediction(outputTensor)
+    recognizedBoxes.push({ ...item, text })
 
-  return Promise.all(ocrPromises)
+    tf.dispose(tensor)
+  }
+
+  return recognizedBoxes
 }
 
 /**
@@ -296,31 +265,27 @@ const runOcrOnBoxes = async (
  * @param outputTensor onnxruntime的输出Tensor
  * @returns 识别的字符串
  */
-function decodeOcrOutput(outputTensor: ort.Tensor): string {
-  const predictions = outputTensor.data as Float32Array
-  const shape = outputTensor.dims
+function decodeOcrPrediction(prediction: ort.Tensor): string {
+  const data = prediction.data as Float32Array
+  const shape = prediction.dims // [batch, sequence_length, num_characters]
   const sequenceLength = shape[1]
-  const numClasses = shape[2]
+  const numChars = shape[2]
 
-  let rawText = ''
-  for (let t = 0; t < sequenceLength; t++) {
-    let maxProb = -Infinity
-    let maxIndex = -1
-    for (let c = 0; c < numClasses; c++) {
-      const prob = predictions[t * numClasses + c]
-      if (prob > maxProb) {
-        maxProb = prob
-        maxIndex = c
-      }
+  let text = ''
+  let lastIndex = 0
+
+  // 遍历序列 (时间步)
+  for (let i = 0; i < sequenceLength; i++) {
+    const sequenceSlice = data.slice(i * numChars, (i + 1) * numChars)
+    const maxIndex = sequenceSlice.indexOf(Math.max(...sequenceSlice))
+
+    // CTC解码逻辑：忽略blank (索引0) 和连续重复的字符
+    if (maxIndex > 0 && maxIndex !== lastIndex) {
+      text += intToChar.get(maxIndex) ?? ''
     }
-    if (maxIndex > 0 && maxIndex < OCR_CHARSET.length) {
-      // 假设0是blank
-      rawText += OCR_CHARSET[maxIndex - 1]
-    }
+    lastIndex = maxIndex
   }
-
-  // 去除重复和blank
-  return rawText.replace(/(.)\1+/g, '$1').replace(/[-]/g, '') // 假设-是blank字符
+  return text
 }
 
 /**
@@ -349,24 +314,15 @@ function matchNumber(str: string): number | undefined {
 }
 
 function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
-  console.log('--- 开始智能配对与解析 (新逻辑) ---')
+  console.log('--- 开始智能配对与解析 (最终版) ---')
   console.log('所有识别出的文本块:', recognizedBoxes)
 
+  const unitsRegex = /公斤|%|大卡|cm|岁/g
   const pairs: Record<string, string> = {}
 
-  // 复制一份，用于安全地从中移除已匹配的项
-  const unmatchedBoxes = [...recognizedBoxes]
-
-  // 按从上到下，从左到右的顺序排序，便于处理
-  unmatchedBoxes.sort((a, b) => {
-    if (Math.abs(a.box[1] - b.box[1]) > 10) {
-      // Y坐标差异大，按Y排序
-      return a.box[1] - b.box[1]
-    }
-    return a.box[0] - b.box[0] // Y坐标相近，按X排序
-  })
-
-  // 定义一个关键词列表，帮助我们识别哪些是可能的"name"
+  // =================================================================
+  // 阶段 1: 预分类与清洗
+  // =================================================================
   const nameKeywords = [
     '体重',
     'BMI',
@@ -388,71 +344,134 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     '肌肉控制',
     '体型'
   ]
+  const statusKeywords = ['偏胖', '偏高', '标准', '偏低', '肥胖型', '正常']
 
-  const potentialNames = unmatchedBoxes.filter(b =>
-    nameKeywords.some(keyword => (b.text ?? '').startsWith(keyword))
-  )
+  const names: BoundingBox[] = []
+  const values: BoundingBox[] = []
+  const statuses: BoundingBox[] = []
+  const others: BoundingBox[] = [] // 存放无法明确分类的项
 
-  const potentialValues = new Set(
-    unmatchedBoxes.filter(b => !potentialNames.includes(b))
-  )
+  for (const box of recognizedBoxes) {
+    const text = box.text?.trim() ?? ''
+    if (!text) continue
 
-  for (const nameBox of potentialNames) {
+    if (nameKeywords.some(keyword => text.startsWith(keyword))) {
+      names.push(box)
+    } else if (statusKeywords.some(keyword => text.includes(keyword))) {
+      statuses.push(box)
+    } else if (/\d/.test(text)) {
+      // 只要包含数字，就优先认为是Value
+      values.push(box)
+    } else {
+      others.push(box) // 其他无法分类的，比如顶部的"脂肪"
+    }
+  }
+
+  // =================================================================
+  // 阶段 2: 核心匹配逻辑
+  // =================================================================
+  const unmatchedValues = new Set(values)
+  const unmatchedStatuses = new Set(statuses)
+
+  for (const nameBox of names) {
     if (!nameBox.text) continue
 
     let bestMatch: BoundingBox | null = null
     let minDistance = Infinity
 
-    for (const valueBox of potentialValues) {
-      const [nx, ny, nright, nbottom] = nameBox.box
+    const [nx, ny, nright, nbottom] = nameBox.box
+    const nCenterX = (nx + nright) / 2
+    const nCenterY = (ny + nbottom) / 2
+    const nHeight = nbottom - ny
+    const nWidth = nright - nx
+
+    // --- 遍历所有待匹配的Value ---
+    for (const valueBox of unmatchedValues) {
       const [vx, vy, vright, vbottom] = valueBox.box
-
-      const nCenterX = nx + (nright - nx) / 2
-      const nCenterY = ny + (nbottom - ny) / 2
-      const vCenterX = vx + (vright - vx) / 2
-      const vCenterY = vy + (vbottom - vy) / 2
-
-      // 规则1：检查是左右结构还是上下结构
-      const isHorizontal = Math.abs(nCenterY - vCenterY) < nbottom - ny // Y轴中心点距离小于name的高度，视为水平
-      const isVertical = Math.abs(nCenterX - vCenterX) < nright - nx // X轴中心点距离小于name的宽度，视为垂直
+      const vCenterX = (vx + vright) / 2
+      const vCenterY = (vy + vbottom) / 2
 
       let isSpatiallyCorrect = false
-      if (isHorizontal && vCenterX > nCenterX) {
-        // 左右结构
+      let distance = Infinity
+
+      // 检查1: 左右结构 (Name在左, Value在右)
+      // 条件: Value在Name右侧，且Y轴中心点对齐在一个Name高度的容差内
+      if (vCenterX > nCenterX && Math.abs(vCenterY - nCenterY) < nHeight) {
         isSpatiallyCorrect = true
-      } else if (isVertical && vCenterY > nCenterY) {
-        // 上下结构
-        isSpatiallyCorrect = true
+        distance = vx - nright // 水平间距
       }
 
-      if (isSpatiallyCorrect) {
-        const distance = Math.sqrt(
-          Math.pow(nCenterX - vCenterX, 2) + Math.pow(nCenterY - vCenterY, 2)
-        )
-        if (distance < minDistance) {
-          minDistance = distance
-          bestMatch = valueBox
-        }
+      // 检查2: 上下结构 (Value在上, Name在下)
+      // 条件: Value在Name上方，且X轴中心点对齐在一个Name宽度的容差内
+      if (vCenterY < nCenterY && Math.abs(vCenterX - nCenterX) < nWidth) {
+        isSpatiallyCorrect = true
+        distance = ny - vbottom // 垂直间距
+      }
+
+      if (isSpatiallyCorrect && distance < minDistance) {
+        minDistance = distance
+        bestMatch = valueBox
       }
     }
 
     if (bestMatch?.text) {
-      const key = nameBox.text.replace(/[\s(%)]/g, '')
-      pairs[key] = bestMatch.text
-      potentialValues.delete(bestMatch) // 从待匹配集合中移除
+      const key = nameBox.text.replace(/[\s(%)（）]/g, '')
+
+      // --- 【新增逻辑】: 清洗单位 ---
+
+      const cleanedValue = bestMatch.text.replace(unitsRegex, '').trim()
+
+      pairs[key] = cleanedValue
+      unmatchedValues.delete(bestMatch) // 从待匹配集合中移除
+
       console.log(
-        `%c成功匹配: { "${key}": "${bestMatch.text}" }`,
+        `%c成功匹配: { "${key}": "${bestMatch.text}" } -> 清洗后: "${cleanedValue}"`,
         'color: green'
-      )
-    } else {
-      console.log(
-        `%c匹配失败: Name "${nameBox.text}" 未找到合适的 Value.`,
-        'color: red'
       )
     }
   }
 
-  // 初始化数据结构
+  // =================================================================
+  // 阶段 3: 为已经匹配的Value寻找紧邻的Status (处理三栏结构)
+  // =================================================================
+  const matchedNames = Object.keys(pairs)
+  for (const nameKey in pairs) {
+    const valueStr = pairs[nameKey]
+    // 找到对应的nameBox和valueBox
+    const nameBox = names.find(
+      n => n.text?.replace(/[\s(%)（）]/g, '') === nameKey
+    )
+    const valueBox = values.find(
+      v => v.text?.replace(unitsRegex, '').trim() === valueStr
+    )
+
+    if (nameBox && valueBox) {
+      let closestStatus: BoundingBox | null = null
+      let minStatusDist = Infinity
+      const [vx, vy, vright, vbottom] = valueBox.box
+
+      for (const statusBox of unmatchedStatuses) {
+        const [sx, sy, sright, sbottom] = statusBox.box
+        // 条件：Status必须在Value的右侧，且Y轴对齐
+        if (sx > vright && Math.abs(sy - vy) < vbottom - vy) {
+          const dist = sx - vright
+          if (dist < minStatusDist) {
+            minStatusDist = dist
+            closestStatus = statusBox
+          }
+        }
+      }
+      if (closestStatus) {
+        // 我们用一个特殊的后缀来存储status
+        pairs[nameKey + '_status'] = closestStatus.text
+        unmatchedStatuses.delete(closestStatus)
+      }
+    }
+  }
+
+  // =================================================================
+  // 阶段 4: 将解析结果映射到最终的结构化数据中
+  // =================================================================
   const data: BodyMetrics = {
     date: '',
     weight: undefined,
@@ -475,11 +494,8 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     muscleControl: undefined,
     bodyType: ''
   }
-
-  // 关键字映射表
   const keywordMap: Record<string, keyof BodyMetrics> = {
     体重: 'weight',
-    BMl: 'bmi',
     BMI: 'bmi',
     体脂率: 'bodyFatRate',
     水分率: 'waterRate',
@@ -494,50 +510,36 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     基础代谢: 'basalMetabolism',
     活动代谢: 'activeMetabolism',
     建议体重: 'targetWeight',
-    目标体重: 'targetWeight',
     体重控制: 'weightControl',
     脂肪控制: 'fatControl',
     肌肉控制: 'muscleControl',
     体型: 'bodyType'
   }
-  const rawTextLines: string[] = []
-  // 遍历配对好的键值对进行解析
-  for (const recognizedKey in pairs) {
-    const valueStr = pairs[recognizedKey]
 
-    // 找到映射关系
-    for (const mapKey in keywordMap) {
-      if (recognizedKey.startsWith(mapKey)) {
-        const dataKey = keywordMap[mapKey]
+  for (const key in pairs) {
+    if (key.endsWith('_status')) continue // 先只处理主值
 
-        // 记录到原始文本中
-        rawTextLines.push(`${recognizedKey}: ${valueStr}`)
+    const valueStr = pairs[key]
+    const statusStr = pairs[key + '_status']
+    const dataKey = keywordMap[key]
 
-        // --- 应用您的解析和清洗逻辑 ---
-        if (dataKey === 'bodyType') {
-          // `bodyType`是字符串，特殊处理
-          data.bodyType = valueStr.replace(/型$/, '').trim() + '型'
-        } else {
-          // 其他都是数值类型
-          let value = matchNumber(valueStr)
-
-          if (value !== undefined) {
-            // 数据清洗与纠错 (完全移植您的逻辑)
-            if (dataKey === 'bmi' && value > 50) {
-              value /= 10 // 处理可能的小数点识别错误
-            }
-            if (
-              (String(dataKey).includes('Rate') ||
-                String(dataKey).includes('率')) &&
-              value > 100
-            ) {
-              value /= 10 // 处理百分比可能的识别错误
-            }
-            // 使用类型断言来安全地赋值
-            data[dataKey] = value
-          }
+    if (dataKey) {
+      if (dataKey === 'bodyType') {
+        data.bodyType = valueStr
+      } else if (statusKeywords.includes(valueStr)) {
+        // 处理 name-status 直接配对的情况 (例如 体型: 肥胖型)
+        data[dataKey] = valueStr
+      } else {
+        const numValue = matchNumber(valueStr)
+        if (numValue !== undefined) {
+          data[dataKey] = numValue
         }
-        break // 找到匹配后就跳出内层循环
+      }
+
+      // 如果有status，也一并赋值
+      if (statusStr && dataKey !== 'bodyType') {
+        // 您可以决定如何存储status，例如创建一个新的字段
+        // (data as any)[dataKey + '_status'] = statusStr;
       }
     }
   }
@@ -545,7 +547,11 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
   console.log('解析后的键值对:', pairs)
   console.log('最终结构化数据:', data)
 
+  const rawTextLines = Object.entries(pairs).map(
+    ([key, value]) => `${key}: ${value}`
+  )
   return { rawText: rawTextLines.join('\n'), parsedData: data }
+  ////////////////////////////
 }
 /**
  * 在图片上绘制边界框用于调试
@@ -588,4 +594,95 @@ function drawBoxesOnImage(
 
   // 3. 返回图片的Data URL
   return canvas.toDataURL('image/jpeg')
+}
+
+/**
+ * [新] 封装的可视化逻辑
+ * 在图片上绘制边界框，并返回一个包含Data URL和原始框数据的对象。
+ * @param imageElement 原始图片
+ * @param boxes 边界框数组
+ * @returns 一个包含可视化图片URL的对象
+ */
+export function visualizeLayoutDetection(
+  imageElement: HTMLImageElement,
+  boxes: BoundingBox[]
+): { debugImageUrl: string } {
+  const canvas = document.createElement('canvas')
+  canvas.width = imageElement.naturalWidth
+  canvas.height = imageElement.naturalHeight
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('无法获取2D上下文')
+
+  ctx.drawImage(imageElement, 0, 0)
+
+  for (const item of boxes) {
+    const [x1, y1, x2, y2] = item.box
+    const width = x2 - x1
+    const height = y2 - y1
+
+    // 使用随机但明亮的颜色
+    const color = `hsl(${(Math.random() * 360).toString()}, 90%, 60%)`
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2
+    ctx.strokeRect(x1, y1, width, height)
+  }
+
+  return { debugImageUrl: canvas.toDataURL('image/jpeg') }
+}
+
+/**
+ * [新] 裁剪所有检测框并打包下载为zip
+ * @param imageElement 原始图片
+ * @param boxes 从布局检测中得到的边界框数组
+ */
+export async function cropAndDownloadTrainingSet(
+  imageElement: HTMLImageElement,
+  boxes: BoundingBox[]
+): Promise<void> {
+  const zip = new JSZip()
+  const imagesFolder = zip.folder('images') // 在zip包内创建一个images文件夹
+
+  if (!imagesFolder) {
+    throw new Error('创建zip文件夹失败')
+  }
+
+  // 用于生成labels.txt的内容
+  const labelsContent: string[] = []
+
+  // 使用Promise.all来并行处理所有裁剪操作
+  await Promise.all(
+    boxes.map(async (item, index) => {
+      const [x1, y1, x2, y2] = item.box
+      const width = Math.max(1, x2 - x1) // 确保宽高至少为1
+      const height = Math.max(1, y2 - y1)
+
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      // 从原始大图中裁剪
+      ctx.drawImage(imageElement, x1, y1, width, height, 0, 0, width, height)
+
+      // 将canvas内容转为Blob
+      const blob = await new Promise<Blob | null>(resolve =>
+        canvas.toBlob(resolve, 'image/png')
+      )
+      if (blob) {
+        // 使用唯一的临时文件名
+        const filename = `image_${index}_fixme.png`
+        imagesFolder.file(filename, blob)
+        // 为labels.txt添加一行，内容是 "images/filename.png [请在这里填写正确文本]"
+        labelsContent.push(`images/${filename}\t[REPLACE_WITH_CORRECT_TEXT]`)
+      }
+    })
+  )
+
+  // 将labels.txt添加到zip根目录
+  zip.file('labels.txt', labelsContent.join('\n'))
+
+  // 生成zip文件并触发下载
+  const zipBlob = await zip.generateAsync({ type: 'blob' })
+  saveAs(zipBlob, 'ocr_finetune_dataset.zip')
 }
