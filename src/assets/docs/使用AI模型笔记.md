@@ -1,6 +1,6 @@
 # 使用AI模型笔记
 
-## 1. Transformers.js + Phi-3-gguf (已放弃)
+## 1. Transformers.js + Phi-3-gguf (已放弃) ❌
 
 **@huggingface/transformers + microsoft/Phi-3-mini-4k-instruct-gguf：**
 
@@ -69,7 +69,7 @@
 
 **<font color='red' size='5'>❌ Transformers.js 不支持 gguf 格式，所以这个方案暂时放弃。</font>**
 
-## 2. Transformers.js + Phi-3(已放弃)
+## 2. Transformers.js + Phi-3(已放弃) ❌
 
 **@huggingface/transformers + Xenova/Phi-3-mini-4k-instruct：**
 
@@ -92,7 +92,7 @@
 
 **<font color='red' size='5'>❌ 因为 Transformers.js 不支持 tiktoken tokenizer，所以这个方案暂时放弃。</font>**
 
-## 3. WebLLM + Phi-3/Qwen3 （可行）
+## 3. WebLLM + Phi-3/Qwen3 （可行）✔️
 
 1. 安装 WebLLM
 
