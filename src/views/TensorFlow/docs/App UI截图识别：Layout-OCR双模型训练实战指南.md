@@ -2,7 +2,7 @@
 
 本文将详细介绍如何针对手机App UI截图，训练两个轻量化自定义模型（布局检测+文本识别），实现结构化GUI信息提取。整体思路为 **“文档/UI布局分析 -> 文本识别”**，因UI截图字体、布局固定，稳定性远超真实世界照片处理~ 🚀
 
-# 核心策略：Layout-OCR双模型方案
+## 核心策略：Layout-OCR双模型方案
 
 采用“先定位区域，再识别文本”的两步法，兼顾精度与效率：
 
@@ -71,7 +71,7 @@
 - 添加少量高斯噪声
 - 极其微小的旋转（±1-2度）
 
-实操：使用python `Albumentations` 库，项目本地运行命令 `python augment_data.py` 即可。
+实操：使用python `Albumentations` 库，项目本地运行命令 `python augment_data_init.py` 即可。
 
 代码参考：[使用Albumentations进行数据增强代码](https://github.com/mingchangge/MachineLearning-python/blob/master/laoutModel/augment_data_init.py)
 
@@ -97,8 +97,8 @@
     | **输出目录** | `/content/` (临时)              | `/kaggle/working/` (可写, 最终会被保存) |                                                              |
 
 > **💡为什么选择Kaggle？**
->
-> ❌ 我使用Google Colab最后模型生成后却因为免费资源配额已用尽，在还没保存到本地前就被清空了。这着实叫我有些恼火🔥，所以直接改用**Kaggle**进行模型训练。
+> ✅ 我在Colab上训练YOLO模型时，频繁遇到“资源配额已用尽”的问题，导致训练中断。
+> ❌ 这着实叫我有些恼火💢🔥，所以直接改用**Kaggle**进行模型训练❗
 
 - **框架**: 使用 [Ultralytics YOLOv8](https://github.com/ultralytics/yolov8) 框架，它极大地简化了训练流程。你只需上传标注好的数据集，修改一个配置文件，然后运行一条命令即可开始训练。
 - **训练过程**: 框架会自动加载预训练权重，并在你的自定义数据集上进行微调。通常训练几百个轮次（epochs）后就能得到一个高精度的模型。
@@ -112,17 +112,16 @@
 
 ### 完整训练步骤
 
-| Colab 训练笔记                                                                                                           | Kaggle 训练笔记                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| [Google Colab 训练 YOLO 模型全流程](./GoogleColab%E5%85%A8%E6%B5%81%E7%A8%8B%E8%AE%AD%E7%BB%83YOLO%E6%A8%A1%E5%9E%8B.md) | [Kaggle 训练 YOLO 模型全流程](./Kaggle%E5%85%A8%E6%B5%81%E7%A8%8B%E8%AE%AD%E7%BB%83YOLO%E6%A8%A1%E5%9E%8B.md) |
-
----
+| Colab 训练笔记 (markdown笔记)       | Kaggle 训练笔记(markdown笔记)                             |
+| ----------------------------------- | --------------------------------------------------------- |
+| [一]训练布局检测模型（双类别标注）  | [二]训练布局检测模型（双类别标注）                        |
+| [三] 训练布局检测模型（三类别标注） | [终] 训练布局检测模型（单类别标注、双平台都有、模型微调） |
 
 ---
 
 # 🛠️ 实战二、训练文本识别模型 (Model 2)
 
-#### 步骤 1: 数据集准备 (关键步骤) ✔️
+## 1. 数据集准备 (关键步骤) ✔️
 
 - **方法A：从已标注数据中裁剪**：
 - 编写脚本，根据你为模型一标注的`.xml`或`.json`文件，自动从原始图片中裁剪出所有的`label`和`value`小图片。
@@ -142,7 +141,7 @@
   - 将生成的图片保存，并同时生成一个标签文件，内容就是图片中的文本。通过这种方式，你可以轻松生成几十万张完美的训练数据。
   - 代码示例：[合成高质量的OCR训练数据](https://github.com/mingchangge/MachineLearning-python/blob/master/%E5%90%88%E6%88%90%E9%AB%98%E8%B4%A8%E9%87%8F%E7%9A%84OCR%E8%AE%AD%E7%BB%83%E6%95%B0%E6%8D%AE.md)
 
-#### 步骤 2: 选择模型架构与训练 ✔️
+## 2. 选择模型架构与训练 ✔️
 
 - **模型推荐**: **CRNN (Convolutional Recurrent Neural Network)**。这是OCR任务的黄金标准架构。
 - **卷积层 (CNN)**: 负责从图像中提取视觉特征。
@@ -153,29 +152,22 @@
 - 也可以参考一些开源的轻量级OCR实现，如 [Keras-OCR](https://github.com/faustomorales/keras-ocr) 的模型结构，并在你自己的合成数据集上进行训练。
 - 同样，使用Google Colab进行训练。
 
-#### 步骤 3: 模型转换为 TensorFlow.js 格式 ❌
+## 3. 导出ONNX模型 ✔️
 
-训练完成后，你会得到一个Keras的`.h5`模型。将其转换为TF.js Layers Model。
+原计划使用Keras/TensorFlow导出模型，但因为其与kaggle环境的兼容问题，最终改为使用 `PyTorch` 导出模型。✔️
 
-```python
-tensorflowjs_converter --input_format=keras \
-  /path/to/your_ocr_model.h5 \
-  /path/to/your_tfjs_ocr_model
-```
+原计划将pth模型转换为onnx模型✔️，在将其转为tfjs模型❌。google colab 也好，kaggle 也好，他们的环境都是最新的，还是会遇到一些依赖库的兼容问题。为了解决这些问题，一次又一次的降级依赖版本，但是依赖之间也存在着依赖关系，有的包甚至不支持在新环境中使用。最后只得放弃转换，直接使用onnx模型直接在浏览器中运行。
 
-google colab 也好，kaggle 也好，他们的环境都是最新的，在将onnx模型转换为tfjs模型时，总是会遇到一些问题。为了解决这些问题，一次又一次的降级依赖版本，然而每次都失败。最后，我只得放弃转换，使用onnx模型直接在浏览器中运行。
+## 4. 完整训练步骤
 
----
-
----
+| Colab 训练笔记(markdown笔记)      | Kaggle 训练笔记(markdown笔记) |
+| --------------------------------- | ----------------------------- |
+| [二]训练文本识别模型              | [一]训练文本识别模型          |
+| [三] 训练文本识别模型（不完整版） | [终] 训练文本识别模型         |
 
 ---
 
----
-
----
-
-### 阶段三：在React中整合与后处理
+# 🛠️ 实战三：在React中整合与后处理
 
 你的React代码逻辑将如下：
 
@@ -200,9 +192,9 @@ google colab 也好，kaggle 也好，他们的环境都是最新的，在将onn
     }
     ```
 
-### 阶段四：部分实现
+## 部分实现
 
-#### 1. 安装新依赖：
+### 1. 安装新依赖：
 
 首先，我们需要安装`@tensorflow/tfjs`来运行布局模型，以及`onnxruntime-web`来运行文本识别模型。
 
@@ -210,14 +202,14 @@ google colab 也好，kaggle 也好，他们的环境都是最新的，在将onn
 npm install @tensorflow/tfjs onnxruntime-web
 ```
 
-#### 2. 存放模型文件
+### 2. 存放模型文件
 
 将您训练好的两个模型文件放入项目的 `public` 目录下。这样，它们就可以像普通静态资源一样被访问。
 
 - `public/models/layout_model/model.json` (以及所有对应的 `*.bin` 文件)
 - `public/models/ocr_model/your_ocr_model.onnx`
 
-#### 3. 创建AI服务模块 (`src/services/recognitionService.ts`)
+### 3. 创建AI服务模块 (`src/services/recognitionService.ts`)
 
 **1. 加载布局模型和OCR模型：**
 
@@ -294,7 +286,7 @@ export async function initializeModels() {
 
 代码：略
 
-#### 4. 整合到React组件（`src/components/RecognitionComponent.tsx`）
+### 4. 整合到React组件（`src/components/RecognitionComponent.tsx`）
 
 代码：略
 
@@ -306,15 +298,9 @@ export async function initializeModels() {
 
 ---
 
----
-
----
-
----
-
 # 补充说明
 
-## 数据收集的补充说明
+## 1. 数据收集的补充说明
 
 ### 快速验证 / 针对“黄金样本”
 
@@ -387,15 +373,11 @@ export async function initializeModels() {
 | **可靠起点**       | **50 - 100 张**                      | **~ 40 张**        | **2000 - 4000 张** | 构建一个有一定泛化能力、效果不错的模型。   |
 | **生产级模型**     | **200+ 张** (包含多种设备和边缘情况) | **~ 20 张**        | **4000+ 张**       | 构建一个在多种情况下都表现稳定可靠的模型。 |
 
----
-
-## 除了Google Colab还有没有其他方式训练模式？
+## 2. 除了Google Colab还有没有其他方式训练模式？
 
 绝对有！Google Colab 只是众多选择中的一个，它以免费和易于上手而广受欢迎。当您开始遇到资源限制或需要更稳定的环境时，探索其他方式是非常明智的。
 
 以下是除 Google Colab 之外，主流的模型训练方式，我将它们分为三大类，并分析各自的优缺点，以便您选择最适合自己的方案。
-
----
 
 ### 类别一：其他云端 Notebook 服务 (最直接的替代品)
 
@@ -424,8 +406,6 @@ export async function initializeModels() {
   - 免费版的 GPU 性能和时长不如 Kaggle 或 Colab。
 - **适用场景**: 适合想要稍微投入一点预算，以换取更稳定、更专属环境的严肃爱好者或学生。
 
----
-
 ### 类别二：云端计算平台 (更专业、更强大)
 
 这是“进阶”选项。您不再是使用一个 Notebook 服务，而是在云上**租用一台完整的、带有强大GPU的虚拟机**。您拥有这台机器的完全控制权。
@@ -450,8 +430,6 @@ export async function initializeModels() {
 - **缺点**:
   - **成本警告**: 与 GCP 同样，忘记关闭实例会产生持续费用。
   - 对于初学者来说，AWS 的控制台可能有些令人望而生畏。
-
----
 
 ### 类别三：在您自己的本地机器上训练
 
