@@ -38,10 +38,13 @@ export async function initializeModels() {
 
     const [loadedLayoutModel, loadedOcrSession, charsetContent] =
       await Promise.all([
-        tf.loadGraphModel('/models/layout_model_finetune/model.json'),
-        ort.InferenceSession.create('/models/ocr_model/crnn_model_final.onnx', {
-          executionProviders: ['wasm']
-        }),
+        tf.loadGraphModel('/models/layout_model/model.json'),
+        ort.InferenceSession.create(
+          '/models/ocr_model/crnn_finetuned_web.onnx',
+          {
+            executionProviders: ['wasm']
+          }
+        ),
         fetch(charsetPath).then(res => res.text())
       ])
 
@@ -220,10 +223,16 @@ const runOcrOnBoxes = async (
     const [x1, y1, x2, y2] = item.box
     const width = x2 - x1
     const height = y2 - y1
+    // 裁剪并预处理图像区域 (向外扩张 2-4 像素)
+    const padding = 2 // 可根据需要调整
+    const x1_c = Math.max(0, x1 - padding)
+    const y1_c = Math.max(0, y1 - padding)
+    const width_c = Math.min(imageElement.width - x1_c, width + padding * 2)
+    const height_c = Math.min(imageElement.height - y1_c, height + padding * 2)
 
     const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
+    canvas.width = width_c
+    canvas.height = height_c
     const ctx = canvas.getContext('2d')
     if (!ctx) {
       throw new Error('无法获取2D上下文')
@@ -245,7 +254,7 @@ const runOcrOnBoxes = async (
     })
 
     const feed = {
-      image: new ort.Tensor('float32', tensor.dataSync(), tensor.shape)
+      input: new ort.Tensor('float32', tensor.dataSync(), tensor.shape)
     }
 
     const results = await ocrSession.run(feed)
@@ -294,17 +303,17 @@ function decodeOcrPrediction(prediction: ort.Tensor): string {
  */
 function matchNumber(str: string): number | undefined {
   // 预处理：去除所有空格和非数字相关的特殊字符
-  const cleaned = str.replace(/[^\d.-]/g, '')
+  // const cleaned = str.replace(/[^\d.-]/g, '')
   // 处理可能的多个小数点（只保留第一个）
-  const dotIndex = cleaned.indexOf('.')
-  const normalized =
-    dotIndex !== -1
-      ? cleaned.substring(0, dotIndex + 1) +
-        cleaned.substring(dotIndex + 1).replace(/\./g, '')
-      : cleaned
-
+  // const dotIndex = cleaned.indexOf('.')
+  // const normalized =
+  //   dotIndex !== -1
+  //     ? cleaned.substring(0, dotIndex + 1) +
+  //       cleaned.substring(dotIndex + 1).replace(/\./g, '')
+  //     : cleaned
+  const fixed = str.replace(/。/g, '.').replace(/\s/g, '')
   const regex = /-?\d+(\.\d+)?/
-  const match = regex.exec(normalized)
+  const match = regex.exec(fixed)
 
   if (match) {
     const num = parseFloat(match[0])
@@ -313,16 +322,69 @@ function matchNumber(str: string): number | undefined {
   return undefined
 }
 
-function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
-  console.log('--- 开始智能配对与解析 (最终版) ---')
-  console.log('所有识别出的文本块:', recognizedBoxes)
+/**
+ * 智能配对与解析函数 (优化版)
+ * 核心策略：利用页面排版特征（列表通常是左右结构）来过滤 header 区域的干扰（上下结构）
+ * ### 主要优化点：
+ * 1.  **引入 `isSameLine` 辅助函数**：通过几何计算判断两个框是否在“同一行”，这是解决页面顶部“体重”干扰列表“体重”的核心。
+ * 2.  **重构配对逻辑（结构竞争）**：
+ *   *   不再简单地遍历 Name 找 Value。
+ *   *   而是先将 Name 按关键字分组（例如把所有的“体重”框放在一起）。
+ *   *   让这些同名框去竞争匹配 Value，**强制要求“左右结构”且“同一行”**。
+ *   *   **结果**：页面顶部的“体重”因为数值在下方（上下结构），无法满足“同一行”条件，会被自动淘汰；列表中的“体重”满足条件，会被保留。
+ * 3.  **保留并优化体型识别**：保留了你原本的三级查找策略（Others -> Statuses -> Values），这非常稳健。
+ * 4.  **增加特定数据清洗**：针对 OCR 常见的 `11704` (多读了1) 等问题增加了清洗逻辑。
+ */
+// --- 辅助函数：判断两个框是否在视觉上的“同一行”，结合了“中心点对齐”和“垂直重叠率”两种判断，解决字号差异大导致无法匹配的问题 ---
+function isSameLine(boxA: BoundingBox, boxB: BoundingBox): boolean {
+  const [ax1, ay1, ax2, ay2] = boxA.box
+  const [bx1, by1, bx2, by2] = boxB.box
 
-  const unitsRegex = /公斤|%|大卡|cm|岁/g
+  // 1. 计算两个框在 Y 轴上的投影重叠区域
+  const overlapY1 = Math.max(ay1, by1)
+  const overlapY2 = Math.min(ay2, by2)
+  const overlapHeight = Math.max(0, overlapY2 - overlapY1)
+
+  // 2. 获取两个框的最小高度（以此为基准计算重叠比例）
+  const heightA = ay2 - ay1
+  const heightB = by2 - by1
+  const minHeight = Math.min(heightA, heightB)
+
+  // 3. 判断逻辑：
+
+  // 规则 A: 重叠高度 > 最小高度的 50%
+  const isOverlapping = overlapHeight > minHeight * 0.5
+
+  // 规则 B: 中心点对齐 (放宽到 0.5，应对字号差异巨大的情况)
+  const centerYA = (ay1 + ay2) / 2
+  const centerYB = (by1 + by2) / 2
+  const maxHeight = Math.max(heightA, heightB)
+  const isCenterAligned = Math.abs(centerYA - centerYB) < maxHeight * 0.5
+
+  return isOverlapping || isCenterAligned
+}
+function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
+  console.log('--- 开始智能配对与解析 (结构竞争优化版) ---')
+  // console.log('所有识别出的文本块:', recognizedBoxes)
+
+  const unitsRegex = /公斤|%|大卡|cm|岁|kcal/gi
   const pairs: Record<string, string> = {}
 
-  // =================================================================
-  // 阶段 1: 预分类与清洗
-  // =================================================================
+  // 1. 定义体型白名单
+  const bodyTypeValues = [
+    '隐形肥胖型',
+    '肥胖型',
+    '偏胖',
+    '偏胖型',
+    '标准',
+    '标准型',
+    '偏瘦',
+    '偏瘦型',
+    '运动型',
+    '不足'
+  ]
+
+  // 2. 关键字定义
   const nameKeywords = [
     '体重',
     'BMI',
@@ -344,13 +406,25 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     '肌肉控制',
     '体型'
   ]
-  const statusKeywords = ['偏胖', '偏高', '标准', '偏低', '肥胖型', '正常']
+  const statusKeywords = [
+    '偏胖',
+    '偏高',
+    '标准',
+    '偏低',
+    '肥胖型',
+    '正常',
+    '优',
+    '不足'
+  ]
 
   const names: BoundingBox[] = []
   const values: BoundingBox[] = []
   const statuses: BoundingBox[] = []
-  const others: BoundingBox[] = [] // 存放无法明确分类的项
+  const others: BoundingBox[] = []
 
+  // =================================================================
+  // 阶段 1: 预分类与清洗
+  // =================================================================
   for (const box of recognizedBoxes) {
     const text = box.text?.trim() ?? ''
     if (!text) continue
@@ -360,117 +434,164 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     } else if (statusKeywords.some(keyword => text.includes(keyword))) {
       statuses.push(box)
     } else if (/\d/.test(text)) {
-      // 只要包含数字，就优先认为是Value
       values.push(box)
     } else {
-      others.push(box) // 其他无法分类的，比如顶部的"脂肪"
+      others.push(box)
     }
   }
 
   // =================================================================
-  // 阶段 2: 核心匹配逻辑
+  // 阶段 2: 提取体型 (BodyType) - 级联查找策略
+  // =================================================================
+  let foundBodyType = ''
+
+  // 策略 A: 检查 others 数组 (最常见)
+  for (const box of others) {
+    if (bodyTypeValues.some(bt => box.text?.includes(bt))) {
+      foundBodyType = box.text ?? ''
+      console.log(
+        `%c[体型识别] 在Others中找到: ${foundBodyType}`,
+        'color: blue'
+      )
+      break
+    }
+  }
+  // 策略 B: 在 statuses 中查找 (防止被误分为状态)
+  if (!foundBodyType) {
+    for (const box of statuses) {
+      if (bodyTypeValues.some(bt => box.text?.includes(bt))) {
+        foundBodyType = box.text ?? ''
+        console.log(
+          `%c[体型识别] 在Statuses中找到: ${foundBodyType}`,
+          'color: blue'
+        )
+        break
+      }
+    }
+  }
+  // 策略 C: 在 values 中查找 (防止OCR把"0"等误读导致进了values)
+  if (!foundBodyType) {
+    for (const box of values) {
+      if (bodyTypeValues.some(bt => box.text?.includes(bt))) {
+        foundBodyType = box.text ?? ''
+        console.log(
+          `%c[体型识别] 在Values中找到: ${foundBodyType}`,
+          'color: blue'
+        )
+        break
+      }
+    }
+  }
+  if (!foundBodyType) {
+    foundBodyType = '未识别到' // 保持为空字符串，或者按需设置为 '未识别到'
+  }
+
+  // =================================================================
+  // 阶段 3: 核心匹配逻辑 (基于重叠率 + 最近邻居)
   // =================================================================
   const unmatchedValues = new Set(values)
-  const unmatchedStatuses = new Set(statuses)
 
-  for (const nameBox of names) {
-    if (!nameBox.text) continue
+  // 3.1 对 Name 进行分组，解决重复 Key 问题 (如两个"体重")
+  const groupedNames: Record<string, BoundingBox[]> = {}
+  names.forEach(box => {
+    // 移除括号和空格，确保 key 干净
+    const key = box.text?.replace(/[\s(%)（）]/g, '') ?? ''
+    if (!key) return
 
-    let bestMatch: BoundingBox | null = null
-    let minDistance = Infinity
+    // ✅ 关键修复：如果数组不存在才创建，否则直接 push
+    if (!groupedNames[key]) {
+      groupedNames[key] = []
+    }
+    groupedNames[key].push(box)
+  })
 
-    const [nx, ny, nright, nbottom] = nameBox.box
-    const nCenterX = (nx + nright) / 2
-    const nCenterY = (ny + nbottom) / 2
-    const nHeight = nbottom - ny
-    const nWidth = nright - nx
+  // 3.2 遍历每个 Key，寻找“最佳几何匹配”
+  Object.keys(groupedNames).forEach(key => {
+    const candidateNameBoxes = groupedNames[key]
+    // 调试日志：看看究竟有几个框参与了竞争
+    console.log(`Key [${key}] 有 ${candidateNameBoxes.length} 个候选框参与匹配`)
 
-    // --- 遍历所有待匹配的Value ---
-    for (const valueBox of unmatchedValues) {
-      const [vx, vy, vright, vbottom] = valueBox.box
-      const vCenterX = (vx + vright) / 2
-      const vCenterY = (vy + vbottom) / 2
-
-      let isSpatiallyCorrect = false
-      let distance = Infinity
-
-      // 检查1: 左右结构 (Name在左, Value在右)
-      // 条件: Value在Name右侧，且Y轴中心点对齐在一个Name高度的容差内
-      if (vCenterX > nCenterX && Math.abs(vCenterY - nCenterY) < nHeight) {
-        isSpatiallyCorrect = true
-        distance = vx - nright // 水平间距
-      }
-
-      // 检查2: 上下结构 (Value在上, Name在下)
-      // 条件: Value在Name上方，且X轴中心点对齐在一个Name宽度的容差内
-      if (vCenterY < nCenterY && Math.abs(vCenterX - nCenterX) < nWidth) {
-        isSpatiallyCorrect = true
-        distance = ny - vbottom // 垂直间距
-      }
-
-      if (isSpatiallyCorrect && distance < minDistance) {
-        minDistance = distance
-        bestMatch = valueBox
-      }
+    let bestPair = {
+      nameBox: null as BoundingBox | null,
+      valueBox: null as BoundingBox | null,
+      distance: Infinity
     }
 
-    if (bestMatch?.text) {
-      const key = nameBox.text.replace(/[\s(%)（）]/g, '')
+    // 让该 Key 下的所有候选框 (比如顶部的体重、列表的体重) 去竞争
+    for (const nameBox of candidateNameBoxes) {
+      const [nx, ny, nright, nbottom] = nameBox.box
 
-      // --- 【新增逻辑】: 清洗单位 ---
+      for (const valueBox of unmatchedValues) {
+        const [vx, vy, vright, vbottom] = valueBox.box
 
-      const cleanedValue = bestMatch.text.replace(unitsRegex, '').trim()
+        // --- 纯几何结构判断 ---
 
-      pairs[key] = cleanedValue
-      unmatchedValues.delete(bestMatch) // 从待匹配集合中移除
+        // 条件 A: 必须在右侧 (Value的中心 X > Name的右边界 - 容差)
+        const isRightSide = (vx + vright) / 2 > nright - 20
 
-      console.log(
-        `%c成功匹配: { "${key}": "${bestMatch.text}" } -> 清洗后: "${cleanedValue}"`,
-        'color: green'
-      )
-    }
-  }
+        // 条件 B: 必须是同一行 (这是过滤 Header 干扰的绝杀)
+        // Header里的“体重”数值在下方，这里会返回 false
+        const isAligned = isSameLine(nameBox, valueBox)
 
-  // =================================================================
-  // 阶段 3: 为已经匹配的Value寻找紧邻的Status (处理三栏结构)
-  // =================================================================
-  const matchedNames = Object.keys(pairs)
-  for (const nameKey in pairs) {
-    const valueStr = pairs[nameKey]
-    // 找到对应的nameBox和valueBox
-    const nameBox = names.find(
-      n => n.text?.replace(/[\s(%)（）]/g, '') === nameKey
-    )
-    const valueBox = values.find(
-      v => v.text?.replace(unitsRegex, '').trim() === valueStr
-    )
+        if (isRightSide && isAligned) {
+          const distance = vx - nright
 
-    if (nameBox && valueBox) {
-      let closestStatus: BoundingBox | null = null
-      let minStatusDist = Infinity
-      const [vx, vy, vright, vbottom] = valueBox.box
-
-      for (const statusBox of unmatchedStatuses) {
-        const [sx, sy, sright, sbottom] = statusBox.box
-        // 条件：Status必须在Value的右侧，且Y轴对齐
-        if (sx > vright && Math.abs(sy - vy) < vbottom - vy) {
-          const dist = sx - vright
-          if (dist < minStatusDist) {
-            minStatusDist = dist
-            closestStatus = statusBox
+          // 条件 C: 最近原则 (The Nearest Neighbor)
+          // 只要距离是正的(允许轻微重叠)，越小越好。
+          if (distance > -50) {
+            if (distance < bestPair.distance) {
+              bestPair = {
+                nameBox: nameBox,
+                valueBox: valueBox,
+                distance: distance
+              }
+            }
           }
         }
       }
-      if (closestStatus) {
-        // 我们用一个特殊的后缀来存储status
-        pairs[nameKey + '_status'] = closestStatus.text
-        unmatchedStatuses.delete(closestStatus)
+    }
+
+    // 3.3 结算最佳匹配
+    if (bestPair.nameBox && bestPair.valueBox) {
+      let cleanedValue =
+        bestPair.valueBox.text?.replace(unitsRegex, '').trim() ?? ''
+
+      // --- [数据清洗] 特定字段的容错处理 ---
+
+      // 修正 1: "11704" -> "1704" (OCR常把前面的竖线读成1)
+      if (
+        (key === '活动代谢' || key === '基础代谢') &&
+        cleanedValue.length === 5 &&
+        cleanedValue.startsWith('1') &&
+        parseInt(cleanedValue) > 3000
+      ) {
+        cleanedValue = cleanedValue.substring(1)
+      }
+
+      // 修正 2: 处理可能的中文句号误读
+      cleanedValue = cleanedValue.replace(/。/g, '.')
+
+      pairs[key] = cleanedValue
+
+      // 标记使用 (防止重复匹配)
+      unmatchedValues.delete(bestPair.valueBox)
+
+      console.log(
+        `✅ 成功配对 [${key}]: ${cleanedValue} (距离: ${bestPair.distance.toFixed(1)})`
+      )
+    } else {
+      // 这里的 log 很重要，如果 Header 的“体重”没匹配到是正常的，我们不关心
+      // 但如果列表里的也没匹配到，说明距离或对齐有问题
+      console.log(`⚠️ Key [${key}] 未找到符合“右侧同路”规则的数值`)
+      if (['体重', 'BMI', '身体年龄'].includes(key)) {
+        console.log(
+          `❌ 警告: Key [${key}] 未找到匹配。请检查 isSameLine 判断。`
+        )
       }
     }
-  }
-
+  })
   // =================================================================
-  // 阶段 4: 将解析结果映射到最终的结构化数据中
+  // 阶段 4: 映射到 BodyMetrics 结构
   // =================================================================
   const data: BodyMetrics = {
     date: '',
@@ -492,8 +613,9 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     weightControl: undefined,
     fatControl: undefined,
     muscleControl: undefined,
-    bodyType: ''
+    bodyType: foundBodyType // 使用阶段2找到的体型
   }
+
   const keywordMap: Record<string, keyof BodyMetrics> = {
     体重: 'weight',
     BMI: 'bmi',
@@ -517,29 +639,23 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
   }
 
   for (const key in pairs) {
-    if (key.endsWith('_status')) continue // 先只处理主值
+    if (key.endsWith('_status')) continue
 
     const valueStr = pairs[key]
-    const statusStr = pairs[key + '_status']
     const dataKey = keywordMap[key]
 
     if (dataKey) {
       if (dataKey === 'bodyType') {
-        data.bodyType = valueStr
+        // 如果 pairs 里有体型 (极少见，除非体型被识别为 Name:Value 结构)，覆盖前面的 foundBodyType
+        if (valueStr) data.bodyType = valueStr
       } else if (statusKeywords.includes(valueStr)) {
-        // 处理 name-status 直接配对的情况 (例如 体型: 肥胖型)
+        // 容错：如果把状态误认为数值
         data[dataKey] = valueStr
       } else {
         const numValue = matchNumber(valueStr)
         if (numValue !== undefined) {
           data[dataKey] = numValue
         }
-      }
-
-      // 如果有status，也一并赋值
-      if (statusStr && dataKey !== 'bodyType') {
-        // 您可以决定如何存储status，例如创建一个新的字段
-        // (data as any)[dataKey + '_status'] = statusStr;
       }
     }
   }
@@ -551,7 +667,6 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     ([key, value]) => `${key}: ${value}`
   )
   return { rawText: rawTextLines.join('\n'), parsedData: data }
-  ////////////////////////////
 }
 /**
  * 在图片上绘制边界框用于调试
