@@ -12,6 +12,7 @@
   "dependencies": {
     "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@huggingface/transformers": "^3.7.6",
+    "@langchain/core": "^1.1.8",
     "@mlc-ai/web-llm": "^0.2.79",
     "@monaco-editor/react": "^4.7.0",
     "@tensorflow/tfjs": "^4.22.0",
