@@ -218,17 +218,29 @@ const runOcrOnBoxes = async (
   const ocrInputHeight = OCR_MODEL_INPUT_HEIGHT
   const ocrInputWidth = OCR_MODEL_INPUT_WIDTH
   const recognizedBoxes: BoundingBox[] = []
+  // --- 配置非对称 Padding (关键修改) ---
+  const padLeft = 6 // 左侧给大点，专门为了抓负号 "-"
+  const padRight = 2 // 右侧给小点，防止读到右边的文字
+  const padTop = 2 // 上下稍微给一点呼吸空间即可
+  const padBottom = 2
 
+  // 图片的真实宽高
+  const imgW = imageElement.width
+  const imgH = imageElement.height
   for (const item of boxes) {
-    const [x1, y1, x2, y2] = item.box
-    const width = x2 - x1
-    const height = y2 - y1
-    // 裁剪并预处理图像区域 (向外扩张 2-4 像素)
-    const padding = 2 // 可根据需要调整
-    const x1_c = Math.max(0, x1 - padding)
-    const y1_c = Math.max(0, y1 - padding)
-    const width_c = Math.min(imageElement.width - x1_c, width + padding * 2)
-    const height_c = Math.min(imageElement.height - y1_c, height + padding * 2)
+    const [x1, y1, x2, y2] = item.box // 原始 YOLO 坐标
+
+    // 1. 计算向外扩张后的新坐标 (注意边界检查，防止超出图片范围)
+    const x1_c = Math.max(0, x1 - padLeft)
+    const y1_c = Math.max(0, y1 - padTop)
+
+    // 注意：x2 和 y2 是坐标点，不是宽高
+    const x2_c = Math.min(imgW, x2 + padRight)
+    const y2_c = Math.min(imgH, y2 + padBottom)
+
+    // 2. 计算裁剪后的新宽高
+    const width_c = x2_c - x1_c
+    const height_c = y2_c - y1_c
 
     const canvas = document.createElement('canvas')
     canvas.width = width_c
@@ -237,14 +249,31 @@ const runOcrOnBoxes = async (
     if (!ctx) {
       throw new Error('无法获取2D上下文')
     }
-    ctx.drawImage(imageElement, x1, y1, width, height, 0, 0, width, height)
+    // --- 优化：填充白色背景 ---
+    // 防止裁剪边缘出现透明像素，导致 Resize 后产生黑边干扰 OCR
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillRect(0, 0, width_c, height_c)
 
+    ctx.drawImage(
+      imageElement,
+      x1_c,
+      y1_c,
+      width_c,
+      height_c,
+      0,
+      0,
+      width_c,
+      height_c
+    )
+
+    // 3. 预处理图像以适应OCR模型输入要求
     const tensor = tf.tidy(() => {
       let imgTensor = tf.browser.fromPixels(canvas, 1) // 初始形状: [H, W, C] = [64, 256, 1]
       imgTensor = tf.image.resizeBilinear(imgTensor, [
         ocrInputHeight,
         ocrInputWidth
       ])
+
       const expandedTensor = imgTensor.toFloat().div(255.0).expandDims(0) // 形状: [B, H, W, C] = [1, 64, 256, 1]
 
       // 【关键修复】: 使用 tf.transpose 重新排列维度
@@ -718,28 +747,62 @@ function drawBoxesOnImage(
  * @param boxes 边界框数组
  * @returns 一个包含可视化图片URL的对象
  */
+/**
+ * [修改版] 可视化布局检测结果
+ * 功能：同时绘制 YOLO 原始检测框（实线）和 OCR 扩充裁剪框（红色虚线）
+ */
 export function visualizeLayoutDetection(
   imageElement: HTMLImageElement,
   boxes: BoundingBox[]
 ): { debugImageUrl: string } {
   const canvas = document.createElement('canvas')
-  canvas.width = imageElement.naturalWidth
-  canvas.height = imageElement.naturalHeight
+  // 使用图片的原始分辨率
+  const imgW = imageElement.naturalWidth
+  const imgH = imageElement.naturalHeight
+  canvas.width = imgW
+  canvas.height = imgH
+
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('无法获取2D上下文')
 
+  // 1. 绘制底图
   ctx.drawImage(imageElement, 0, 0)
+
+  // --- 定义与 runOcrOnBoxes 完全一致的 Padding 参数 ---
+  // 建议提取为全局常量，防止两边不一致
+  const padLeft = 8
+  const padRight = 2
+  const padTop = 4
+  const padBottom = 2
 
   for (const item of boxes) {
     const [x1, y1, x2, y2] = item.box
     const width = x2 - x1
     const height = y2 - y1
 
-    // 使用随机但明亮的颜色
+    // --- A. 绘制原始 YOLO 检测框 (保持你原本的逻辑) ---
+    // 使用随机亮色，实线
     const color = `hsl(${(Math.random() * 360).toString()}, 90%, 60%)`
     ctx.strokeStyle = color
     ctx.lineWidth = 2
+    ctx.setLineDash([]) // 确保是实线
     ctx.strokeRect(x1, y1, width, height)
+
+    // --- B. 绘制加了 Padding 后的 OCR 裁剪框 (新增) ---
+    // 计算扩充后的坐标 (注意不要超出图片边界)
+    const x1_c = Math.max(0, x1 - padLeft)
+    const y1_c = Math.max(0, y1 - padTop)
+    const x2_c = Math.min(imgW, x2 + padRight)
+    const y2_c = Math.min(imgH, y2 + padBottom)
+
+    const width_c = x2_c - x1_c
+    const height_c = y2_c - y1_c
+
+    // 绘制样式：红色虚线框，稍微细一点
+    ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)' // 鲜红色，带一点透明
+    ctx.lineWidth = 1 // 线条细一点，区分原始框
+    ctx.setLineDash([4, 2]) // 设置虚线模式：4px实线，2px空白
+    ctx.strokeRect(x1_c, y1_c, width_c, height_c)
   }
 
   return { debugImageUrl: canvas.toDataURL('image/jpeg') }
