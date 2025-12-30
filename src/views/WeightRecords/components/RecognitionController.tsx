@@ -1,24 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react' // 引入 useRef
 import { Button, Progress, Space, message } from 'antd'
 import { SyncOutlined, ScissorOutlined } from '@ant-design/icons'
-// 导入我们的服务和类型
-import {
-  initializeModels,
-  runRecognition,
-  visualizeLayoutDetection,
-  cropAndDownloadTrainingSet
-} from '@/services/recognitionService'
-import type { BoundingBox, RecognitionResult } from './types'
-
-interface RecognitionControllerProps {
-  isRecognizing: boolean
-  selectedImage: string | null
-  // 更新sendRecognizedData的类型签名
-  sendRecognizedData: (data: RecognitionResult) => void
-  sendIsRecognizing: (isRecognizing: boolean) => void
-}
+import { initializeModels, runRecognition } from '@/services/ocr'
+import type { RecognitionControllerProps } from '@/services/ocr/types'
 
 const RecognitionController = ({
+  historyRecords,
   isRecognizing,
   selectedImage,
   sendRecognizedData,
@@ -28,8 +15,10 @@ const RecognitionController = ({
   const [loadingMessage, setLoadingMessage] =
     useState<string>('正在加载AI模型...')
   const [debugImage, setDebugImage] = useState<string | null>(null)
-  const [rawBoxes, setRawBoxes] = useState<BoundingBox[] | null>(null) // 保存原始检测框
   const [isCropping, setIsCropping] = useState<boolean>(false)
+
+  // 使用 useRef 来存储下载函数，避免因为闭包导致内存泄漏或状态丢失
+  const downloadActionRef = useRef<(() => Promise<void>) | undefined>(undefined)
 
   // 在组件挂载时，只调用一次模型初始化函数
   useEffect(() => {
@@ -52,37 +41,33 @@ const RecognitionController = ({
     }
 
     sendIsRecognizing(true)
-    setDebugImage(null) // 清空旧的可视化
-    setRawBoxes(null) // 清空旧的框数据
+    setDebugImage(null)
+    downloadActionRef.current = undefined // 重置下载函数
+
     try {
-      // 识别流程
-      const result: RecognitionResult = await runRecognition(
-        selectedImage,
-        true
-      )
-      // 2. 如果识别成功，保存原始框数据用于后续裁剪
-      if (result.boxesForCropping) {
-        setRawBoxes(result.boxesForCropping)
-      }
+      // ✅ 极其简洁的调用：传入 debug: true
+      const result = await runRecognition(selectedImage, historyRecords, {
+        debug: true
+      })
 
-      // 3. 【新】调用封装好的可视化函数
-      // 我们需要重新加载一次图片元素，因为runRecognition内部的元素已被回收
-      const img = new Image()
-      img.onload = async () => {
-        const vizResult = await visualizeLayoutDetection(
-          img,
-          result.boxesForCropping
-        )
-        setDebugImage(vizResult.debugImageUrl)
-      }
-      img.src = selectedImage
-
+      // 1. 处理数据
       sendRecognizedData(result)
+
+      // 2. 直接获取调试图片 (无需 new Image)
+      if (result.debugImageUrl) {
+        setDebugImage(result.debugImageUrl)
+      }
+
+      // 3. 保存下载函数 (无需 rawBoxes 状态)
+      if (result.downloadTrainingSet) {
+        downloadActionRef.current = result.downloadTrainingSet
+      }
+
       message.success('识别成功')
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : String(err)
-      console.error('识别失败:', errorMessage)
-      message.error(`识别失败: ${errorMessage}`)
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('识别失败:', msg)
+      message.error(`识别失败: ${msg}`)
     } finally {
       sendIsRecognizing(false)
     }
@@ -90,29 +75,25 @@ const RecognitionController = ({
 
   // --- 【新增】处理裁剪和下载的函数 ---
   const onCropAndDownload = async () => {
-    if (!selectedImage || !rawBoxes) {
-      message.warning('没有可裁剪的数据。')
+    if (!downloadActionRef.current) {
+      message.warning('无法下载，请重新识别。')
       return
     }
 
     setIsCropping(true)
-    message.info('正在裁剪并打包训练集...')
+    message.info('正在打包训练集...')
 
     try {
-      const img = new Image()
-      img.onload = async () => {
-        await cropAndDownloadTrainingSet(img, rawBoxes)
-        message.success('训练集已开始下载！')
-      }
-      img.src = selectedImage
+      // 直接调用保存的闭包函数
+      await downloadActionRef.current()
+      message.success('下载已开始！')
     } catch (error) {
-      console.error('裁剪失败:', error)
-      message.error('裁剪打包失败。')
+      console.error(error)
+      message.error('打包失败')
     } finally {
       setIsCropping(false)
     }
   }
-  // --- UI部分 ---
 
   // 如果模型正在加载，显示加载状态
   if (!modelsLoaded) {
@@ -140,20 +121,26 @@ const RecognitionController = ({
       </div>
       {/* 在这里显示调试图片！ */}
       {debugImage && (
-        <div>
-          <h3>布局检测结果可视化：</h3>
+        <div style={{ textAlign: 'center' }}>
+          <h3>AI 视野 (红框为 Agent 关注区域)：</h3>
           <img
             src={debugImage}
             alt="Debug Preview"
-            style={{ maxWidth: '100%' }}
+            style={{
+              maxWidth: '100%',
+              border: '1px solid #eee',
+              borderRadius: '8px'
+            }}
           />
-          <Button
-            icon={isCropping ? <SyncOutlined spin /> : <ScissorOutlined />}
-            onClick={onCropAndDownload}
-            disabled={isCropping}
-          >
-            {isCropping ? '正在打包...' : '裁剪并下载训练集 (.zip)'}
-          </Button>
+          <div style={{ marginTop: 12 }}>
+            <Button
+              icon={isCropping ? <SyncOutlined spin /> : <ScissorOutlined />}
+              onClick={() => void onCropAndDownload()}
+              disabled={isCropping || !downloadActionRef.current}
+            >
+              {isCropping ? '正在打包...' : '下载训练集 (用于微调)'}
+            </Button>
+          </div>
         </div>
       )}
       {/* 识别中的进度条，因为自定义模型速度很快，可以考虑用不确定进度的加载条 */}

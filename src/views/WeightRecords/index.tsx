@@ -75,11 +75,14 @@ const ImageRecognition = () => {
     if (!parsedData) return
 
     // 1. 更新当前识别结果
-    const updatedData = { ...parsedData }
+    const updatedData = { ...parsedData } as Record<
+      string,
+      string | number | undefined
+    >
     updatedTableData.forEach(item => {
       updatedData[item.key] = item.value
     })
-    setParsedData(updatedData)
+    setParsedData(updatedData as unknown as BodyMetrics)
 
     // 2. 打开保存确认弹窗
     setSaveModalVisible(true)
@@ -105,9 +108,9 @@ const ImageRecognition = () => {
 
   // 准备表格数据
   const tableData = parsedData
-    ? Object.entries(parsedData).map(([key, value]) => ({
-        key: key as keyof BodyMetrics,
-        value
+    ? (Object.keys(parsedData) as (keyof BodyMetrics)[]).map(key => ({
+        key,
+        value: parsedData[key]
       }))
     : []
 
@@ -172,6 +175,7 @@ const ImageRecognition = () => {
             <ImageUploader sendImageData={handleImageData} />
             <div style={{ marginTop: '24px' }}>
               <RecognitionController
+                historyRecords={records}
                 isRecognizing={isRecognizing}
                 selectedImage={selectedImage}
                 sendRecognizedData={handleRecognizedData}
