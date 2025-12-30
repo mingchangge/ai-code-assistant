@@ -286,7 +286,7 @@ export async function initializeModels() {
 
 代码：略
 
-### 4. 整合到React组件（`src/components/RecognitionComponent.tsx`）
+### 4. 整合到React组件（`src/components/RecognitionController_recognitionService.tsx`）
 
 代码：略
 
