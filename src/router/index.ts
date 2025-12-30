@@ -94,6 +94,9 @@ const WeightTracker = wrapWithSuspense(
 const WeightRecords = wrapWithSuspense(
   () => import('@/views/WeightRecords/index')
 )
+const WeightRecords_Tesseract = wrapWithSuspense(
+  () => import('@/views/WeightRecords_Tesseract/index')
+)
 const TransformDemo = wrapWithSuspense(
   () => import('@/views/TransformDemo/index')
 )
@@ -168,6 +171,10 @@ const routes: RouteObject[] = [
       {
         path: '/weight-records',
         element: createElement(WeightRecords)
+      },
+      {
+        path: '/weight-records-tesseract',
+        element: createElement(WeightRecords_Tesseract)
       },
       {
         path: '/transform-demo',

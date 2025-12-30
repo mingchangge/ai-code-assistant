@@ -136,6 +136,12 @@ const SideMenu = () => {
           icon: <ShoppingOutlined />,
           label: '体重记录',
           path: '/weight-records'
+        },
+        {
+          key: 'weight-records-tesseract',
+          icon: <ShoppingOutlined />,
+          label: '体重记录（Tesseract）',
+          path: '/weight-records-tesseract'
         }
       ]
     },
