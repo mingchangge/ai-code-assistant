@@ -21,6 +21,7 @@ import HistoryEcharts from '@/views/WeightRecords/components/HistoryEcharts'
 import DataAnalysis from './components/DataAnalysis'
 import DataAnalysisNormal from './components/DataAnalysis_NormalOutput'
 import DataAnalysisStreamingOutput from './components/DataAnalysis_StreamingOutput'
+import DataAnalysisAbandoned from './components/DataAnalysis_abandoned'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -171,6 +172,11 @@ const ImageRecognition = () => {
                 label: '历史数据分析-流式输出',
                 key: '5',
                 children: <DataAnalysisStreamingOutput records={records} />
+              },
+              {
+                label: '历史数据分析-废弃版',
+                key: '6',
+                children: <DataAnalysisAbandoned records={records} />
               }
             ]}
           />

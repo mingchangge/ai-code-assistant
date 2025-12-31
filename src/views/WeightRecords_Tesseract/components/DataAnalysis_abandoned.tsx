@@ -14,7 +14,7 @@ import {
 import MarkdownIt from 'markdown-it'
 import type { BodyMetricsRecord } from '@/views/WeightRecords/components/types'
 
-const { Title, Text } = Typography
+const { Title, Text, Paragraph } = Typography
 
 type Status =
   | { type: 'idle'; message: string }
@@ -176,7 +176,10 @@ export default function DataAnalysis({
         return <p style={{ fontSize: 14, padding: '16px' }}>{status.message}</p>
     }
   }
-
+  const errorText = `
+    An error occurred during model execution: "2129075616". 
+    Inputs given to model: \`{ ... past_key_values.x.key: Float32Array(0) ...}\`
+  `
   return (
     <Splitter
       style={{
@@ -240,10 +243,15 @@ export default function DataAnalysis({
         <Title level={4} style={{ marginBottom: 12, paddingLeft: 12 }}>
           AI 分析与建议
         </Title>
+        <Paragraph style={{ marginBottom: 12, paddingLeft: 12 }}>
+          <Text strong>放弃原因：</Text>分析数据报错：
+          <Text code>{errorText}</Text>
+          。这个错误是模型已下载但推理时崩溃。
+        </Paragraph>
         <Card
           style={{
             marginLeft: 12,
-            height: 'calc(100% - 44px)',
+            height: 'calc(100% - 138px)',
             overflowY: 'auto',
             border: '1px solid #f0f0f0'
           }}

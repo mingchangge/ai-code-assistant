@@ -29,7 +29,7 @@
 - `src/serviceWorkers/sw.ts`
 - `src/workers/opfs-cache.worker.ts`
 - `src/utils/register-sw.ts`
-- `src/views/WeightRecords/components/DataAnalysis.tsx`
+- <s>`src/views/WeightRecords_Tesseract/components/DataAnalysis.tsx`</s> 已被其他内容覆盖，无此文件‼️
 
 ### 3. 完整数据流程
 
@@ -46,7 +46,7 @@
 ### 模型加载
 
 1. 将模型文件上传到浏览器的OPFS系统中：`src/workers/opfs-cache.worker.ts`
-2. 加载模型文件：`src/views/WeightRecords/components/DataAnalysis.tsx`
+2. 加载模型文件：<s>`src/views/WeightRecords_Tesseract/components/DataAnalysis.tsx`</s> 已被其他内容覆盖，无此文件‼️
 3. 报错：`Local file missing at "/models/phi3/tokenizer.json" and download aborted due to invalid model ID "/models/phi3".`
 
 **❌ 放弃原因**：
@@ -86,7 +86,7 @@
    - Phi-3 使用 tiktoken 编码器（和 GPT-4 一样），不是 BPE 或 SentencePiece。
 
 4. 相关文件地址：
-   - 数据分析组件：`src/views/WeightRecords/components/DataAnalysis_abandoned.tsx`
+   - 数据分析组件：`src/views/WeightRecords_Tesseract/components/DataAnalysis_abandoned.tsx`
    - 模型加载 Worker：`src/workers/modelWorker_abandoned.ts`
    - 模型wasm文件：`public/ort-wasm-simd-threaded.jsep.wasm` ，由 `node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm` 文件复制，是为了修复work线程请求文件地址错误的问题
 
@@ -105,8 +105,8 @@
    - Phi-3模型：微软开发的轻量级大语言模型，专为边缘计算优化
    - Qwen3模型：阿里巴巴开发的轻量级大语言模型，专为在浏览器等资源受限环境中高效运行而优化。
 3. 主要实现文件：
-   - 普通输出版本：`src/views/WeightRecords/components/DataAnalysis_NormalOutput.tsx`
-   - 流式输出版本：`src/views/WeightRecords/components/DataAnalysis_StreamingOutput.tsx`
+   - 普通输出版本：`src/views/WeightRecords_Tesseract/components/DataAnalysis_NormalOutput.tsx`
+   - 流式输出版本：`src/views/WeightRecords_Tesseract/components/DataAnalysis_StreamingOutput.tsx`
 
 **总结**：
 
