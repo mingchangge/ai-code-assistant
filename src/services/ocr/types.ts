@@ -63,6 +63,7 @@ export interface PairedItem {
 
 export interface RunOptions {
   debug?: boolean
+  useRAG?: boolean
 }
 
 // 扩展返回类型，包含调试图片和裁剪动作
@@ -94,4 +95,10 @@ export interface Range {
 export interface VolatilityConfig {
   [key: string]: number // 允许任意字符串索引，值为数字
   default: number // 必须包含 default
+}
+
+export interface KnowledgeItem {
+  key: string | undefined // 标准 Key，如 'weight'
+  label: string // 中文标签，如 '体重'
+  vector: number[] // 预计算的向量
 }

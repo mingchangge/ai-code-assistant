@@ -1,8 +1,24 @@
 import { useState, useEffect, useRef } from 'react' // 引入 useRef
-import { Button, Progress, Space, message } from 'antd'
-import { SyncOutlined, ScissorOutlined } from '@ant-design/icons'
+import {
+  Button,
+  Progress,
+  Space,
+  message,
+  Typography,
+  Switch,
+  Tooltip
+} from 'antd'
+import {
+  SyncOutlined,
+  ScissorOutlined,
+  RobotOutlined,
+  BulbOutlined
+} from '@ant-design/icons'
 import { initializeModels, runRecognition } from '@/services/ocr'
+import { embeddingEngine } from '@/services/ocr/rag/embedding-engine'
 import type { RecognitionControllerProps } from '@/services/ocr/types'
+
+const { Text } = Typography
 
 const RecognitionController = ({
   historyRecords,
@@ -11,9 +27,15 @@ const RecognitionController = ({
   sendRecognizedData,
   sendIsRecognizing
 }: RecognitionControllerProps) => {
+  // 全局就绪状态 (OCR + RAG 都好了才为 true)
   const [modelsLoaded, setModelsLoaded] = useState<boolean>(false)
+  // 详细的加载文案
   const [loadingMessage, setLoadingMessage] =
-    useState<string>('正在加载AI模型...')
+    useState<string>('正在启动 AI 引擎...')
+
+  const [useRAG, setUseRAG] = useState<boolean>(false)
+  // 专门用于 RAG 模型的下载进度 (0-100)
+  const [ragProgress, setRagProgress] = useState<number>(0)
   const [debugImage, setDebugImage] = useState<string | null>(null)
   const [isCropping, setIsCropping] = useState<boolean>(false)
 
@@ -22,16 +44,57 @@ const RecognitionController = ({
 
   // 在组件挂载时，只调用一次模型初始化函数
   useEffect(() => {
-    initializeModels()
-      .then(() => {
-        setModelsLoaded(true)
-      })
-      .catch((error: unknown) => {
-        console.error(error)
-        setLoadingMessage('模型加载失败，请刷新页面。')
-        message.error(error instanceof Error ? error.message : String(error))
-      })
+    let isMounted = true
+
+    const bootAI = async () => {
+      try {
+        // 1. 绑定 RAG 下载进度回调
+        embeddingEngine.onProgress = progress => {
+          if (!isMounted) return
+          setRagProgress(progress)
+          setLoadingMessage(
+            `正在下载语义理解模型... ${Math.round(progress).toString()}%`
+          )
+        }
+
+        // 🟢 只等待 OCR 初始化
+        await initializeModels()
+        console.log('✅ OCR 模型就绪')
+
+        if (isMounted) {
+          setLoadingMessage('OCR 引擎准备就绪')
+          setModelsLoaded(true)
+        }
+      } catch (error: unknown) {
+        console.error('AI 初始化失败:', error)
+        if (isMounted) {
+          setLoadingMessage('模型加载失败，请检查网络后刷新。')
+          message.error(error instanceof Error ? error.message : String(error))
+        }
+      }
+    }
+
+    bootAI().catch((error: unknown) => {
+      console.error(
+        'AI 启动异常:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+
+    return () => {
+      isMounted = false
+      // 可选：组件卸载时解绑进度回调，防止内存泄漏
+      embeddingEngine.onProgress = null
+    }
   }, []) // 空依赖数组确保只运行一次
+
+  // 处理RAG开关切换
+  const handleRAGToggle = (checked: boolean) => {
+    setUseRAG(checked)
+    if (checked) {
+      message.info('已开启 AI 语义增强，首次使用将自动下载模型')
+    }
+  }
 
   // 处理识别操作的函数现在非常简洁
   const onRecognize = async () => {
@@ -47,7 +110,8 @@ const RecognitionController = ({
     try {
       // ✅ 极其简洁的调用：传入 debug: true
       const result = await runRecognition(selectedImage, historyRecords, {
-        debug: true
+        debug: true,
+        useRAG: useRAG
       })
 
       // 1. 处理数据
@@ -73,7 +137,7 @@ const RecognitionController = ({
     }
   }
 
-  // --- 【新增】处理裁剪和下载的函数 ---
+  // 处理裁剪和下载的函数 ---
   const onCropAndDownload = async () => {
     if (!downloadActionRef.current) {
       message.warning('无法下载，请重新识别。')
@@ -100,7 +164,19 @@ const RecognitionController = ({
     return (
       <Space direction="vertical" align="center" style={{ width: '100%' }}>
         <SyncOutlined spin style={{ fontSize: '24px', color: '#1677ff' }} />
-        <span>{loadingMessage}</span>
+        <div style={{ width: '60%', minWidth: '200px', textAlign: 'center' }}>
+          <Text type="secondary">{loadingMessage}</Text>
+
+          {/* 只有当有下载进度时才显示进度条 */}
+          {ragProgress > 0 && ragProgress < 100 && (
+            <Progress
+              percent={Math.round(ragProgress)}
+              size="small"
+              status="active"
+              style={{ marginTop: 8 }}
+            />
+          )}
+        </div>
       </Space>
     )
   }
@@ -112,12 +188,26 @@ const RecognitionController = ({
         <Button
           type="primary"
           size="large"
-          icon={isRecognizing ? <SyncOutlined spin /> : undefined}
+          icon={isRecognizing ? <SyncOutlined spin /> : <RobotOutlined />}
           onClick={() => void onRecognize()}
           disabled={!selectedImage || isRecognizing}
         >
-          {isRecognizing ? '智能识别中...' : '开始识别'}
+          {isRecognizing ? 'AI 联合分析中...' : '开始智能识别'}
         </Button>
+        <Space>
+          <Text strong>AI 增强模式</Text>
+          <Tooltip title="开启后可自动修正错别字（如'内脏指肪'），但首次运行需要下载模型">
+            <BulbOutlined style={{ color: '#faad14' }} />
+          </Tooltip>
+        </Space>
+        <Switch
+          checkedChildren="ON"
+          unCheckedChildren="OFF"
+          checked={useRAG}
+          onChange={handleRAGToggle}
+          // 可以在识别中禁用开关
+          disabled={isRecognizing}
+        />
       </div>
       {/* 在这里显示调试图片！ */}
       {debugImage && (

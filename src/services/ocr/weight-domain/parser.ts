@@ -6,6 +6,7 @@ import type {
 } from '../types'
 import { createCorrectionAgent } from './ocr-agent'
 import { isSameLine, extractNumber } from '../utils/geometry'
+import { semanticMatcher } from '@/services/ocr/rag/semantic-matcher'
 import {
   KEYWORDS,
   BODY_TYPE_VALUES,
@@ -14,22 +15,78 @@ import {
   INITIAL_METRICS
 } from './constants'
 
-// 1. 预处理与分类 ---
-function classifyBoxes(boxes: BoundingBox[]) {
+// 🌟 [Helper] 反向映射表：English Key -> Chinese Label
+// 用于将 RAG 返回的英文 Key (如 'weight') 转回中文标准名 ('体重')，以兼容后续逻辑
+const REVERSE_METRIC_MAP = Object.entries(METRIC_KEY_MAP).reduce<
+  Record<string, string>
+>((acc, [chn, eng]) => {
+  // 确保 eng 存在 (因为 METRIC_KEY_MAP 的值可能是 undefined)
+  if (eng) {
+    acc[eng] = chn
+  }
+  return acc
+}, {})
+
+/**
+ * 1. 预处理与分类 (增强版：规则 + RAG)
+ * 将原来的同步函数改为异步，支持 AI 语义匹配
+ */
+async function classifyBoxes(boxes: BoundingBox[], useRAG = false) {
   const names: BoundingBox[] = []
   const values: BoundingBox[] = []
   const statuses: BoundingBox[] = []
   const others: BoundingBox[] = []
+  // 用于存储 RAG 修正后的映射关系: Map<BoxReference, StandardChineseName>
+  const normalizedNameMap = new Map<BoundingBox, string>()
+  if (useRAG) {
+    // 确保 RAG 索引已建立 (懒加载)
+    await semanticMatcher.initialize()
+  }
 
   for (const box of boxes) {
     const text = box.text?.trim() ?? ''
     if (!text) continue
-    if (KEYWORDS.NAMES.some(k => text.startsWith(k))) names.push(box)
-    else if (KEYWORDS.STATUS.some(k => text.includes(k))) statuses.push(box)
-    else if (/\d/.test(text)) values.push(box)
-    else others.push(box)
+
+    // 规则优先 (高性能) --- 如果精准匹配到关键字，直接归类
+    if (KEYWORDS.NAMES.some(k => text.startsWith(k))) {
+      names.push(box)
+      // 同时也记录一下标准名（去掉多余符号），方便后续统一处理
+      const standardName = text.replace(/[\s(%)（）:：]/g, '')
+      normalizedNameMap.set(box, standardName)
+      continue
+    }
+
+    if (KEYWORDS.STATUS.some(k => text.includes(k))) {
+      statuses.push(box)
+      continue
+    }
+
+    if (/\d/.test(text)) {
+      values.push(box)
+      continue
+    }
+    if (useRAG && text.length > 1) {
+      // --- B. RAG 语义兜底 (高鲁棒性) ---
+      // 如果既不是数字，也不是已知状态词，可能是写错的指标名 (如 "内脏指肪")
+      // 调用向量检索寻找最匹配的标准 Key
+      const matchedEngKey = await semanticMatcher.findBestMatch(text)
+
+      if (matchedEngKey) {
+        // RAG 命中！
+        const standardChnName = REVERSE_METRIC_MAP[matchedEngKey]
+        if (standardChnName) {
+          console.log(`[RAG] 语义修正: "${text}" -> "${standardChnName}"`)
+          names.push(box)
+          // 关键：将这个 Box 绑定到标准中文名上
+          normalizedNameMap.set(box, standardChnName)
+          continue
+        }
+      }
+    }
+
+    others.push(box)
   }
-  return { names, values, statuses, others }
+  return { names, values, statuses, others, normalizedNameMap }
 }
 
 // 2. 提取体型 (独立逻辑) ---
@@ -43,19 +100,27 @@ function extractBodyType(candidates: BoundingBox[]): string {
   return ''
 }
 
-//  3. 几何配对 (核心算法) ---
+/**
+ * 3. 几何配对 (核心算法 - 适配 RAG)
+ * @param normalizedNameMap RAG 修正后的名称映射表
+ */
 function performGeometricPairing(
   names: BoundingBox[],
-  values: BoundingBox[]
+  values: BoundingBox[],
+  normalizedNameMap: Map<BoundingBox, string> = new Map<BoundingBox, string>()
 ): Partial<Record<string, PairedItem>> {
   const tempPairs: Partial<Record<string, PairedItem>> = {}
 
   // 分组 Names
   const groupedNames: Record<string, BoundingBox[] | undefined> = {}
   names.forEach(box => {
-    const key = box.text?.replace(/[\s(%)（）]/g, '') ?? ''
-    groupedNames[key] ??= []
-    groupedNames[key].push(box)
+    // 🌟 [修改] 优先使用 RAG 修正后的标准名
+    // 如果 map 里没有，再回退到原始文本清洗
+    let key = normalizedNameMap.get(box)
+    key ??= box.text?.replace(/[\s(%)（）]/g, '') ?? ''
+
+    const group = (groupedNames[key] ??= [])
+    group.push(box)
   })
 
   const unmatchedValues = new Set(values)
@@ -221,18 +286,20 @@ function assembleFinalMetrics(
 export async function pairAndParseResults(
   recognizedBoxes: BoundingBox[],
   imageElement: HTMLImageElement,
-  historyData: BodyMetrics[] = []
+  historyData: BodyMetrics[] = [],
+  config: { useRAG?: boolean } = {}
 ): Promise<{ rawText: string; parsedData: BodyMetrics }> {
   console.log('--- 开始智能配对与解析 ---')
 
   // Step 1: 分类
-  const { names, values, statuses, others } = classifyBoxes(recognizedBoxes)
+  const { names, values, statuses, others, normalizedNameMap } =
+    await classifyBoxes(recognizedBoxes, config.useRAG)
 
   // Step 2: 提取体型
   const foundBodyType = extractBodyType([...others, ...statuses, ...values])
 
   // Step 3: 配对
-  const tempPairs = performGeometricPairing(names, values)
+  const tempPairs = performGeometricPairing(names, values, normalizedNameMap)
 
   // Step 4: 提取上下文 (供 Agent 使用)
   const contextData = extractContext(tempPairs)

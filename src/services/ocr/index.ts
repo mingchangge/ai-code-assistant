@@ -20,7 +20,7 @@ export { initializeModels }
 export const runRecognition = async (
   imageUrl: string,
   historyData: BodyMetrics[] = [],
-  options: RunOptions = { debug: false }
+  options: RunOptions = { debug: false, useRAG: false }
 ): Promise<ExtendedRecognitionResult> => {
   // 1. 加载图片
   const img = new Image()
@@ -43,7 +43,9 @@ export const runRecognition = async (
 
   // 4. 配对 + 解析 + Agent 修正 (传入 img 以便 Agent 重试)
   // 注意：你需要修改 logic/parser.ts 适配上面提到的 Agent 逻辑
-  const result = await pairAndParseResults(recognizedBoxes, img, historyData)
+  const result = await pairAndParseResults(recognizedBoxes, img, historyData, {
+    useRAG: options.useRAG
+  })
 
   // 5. [新] 处理调试逻辑
   let debugImageUrl: string | undefined
