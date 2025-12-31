@@ -69,8 +69,7 @@ export interface DebugImageResult {
 
 // --- 2. 主识别函数 ---
 export const runRecognition = async (
-  imageUrl: string,
-  enableDebug = false // 添加一个可选的调试开关
+  imageUrl: string
 ): Promise<RecognitionResult & { boxesForCropping: BoundingBox[] }> => {
   if (!layoutModel || !ocrSession) {
     throw new Error('模型尚未初始化，请先调用 initializeModels()。')
@@ -98,13 +97,7 @@ export const runRecognition = async (
   if (boxes.length === 0) {
     throw new Error('布局检测未能识别出任何文本区域。')
   }
-  // --- 【可视化调试的关键步骤】 ---
-  // let debugImageUrl: string | undefined = undefined
-  // if (enableDebug) {
-  //   // 创建一张带有检测框的新图片
-  //   debugImageUrl = drawBoxesOnImage(imageElement, boxes)
-  //   console.log('调试图片已生成。请在UI中显示它。')
-  // }
+
   const recognizedBoxes = await runOcrOnBoxes(imageElement, boxes)
   // 配对与解析
   const result = pairAndParseResults(recognizedBoxes)
@@ -366,8 +359,8 @@ function matchNumber(str: string): number | undefined {
  */
 // --- 辅助函数：判断两个框是否在视觉上的“同一行”，结合了“中心点对齐”和“垂直重叠率”两种判断，解决字号差异大导致无法匹配的问题 ---
 function isSameLine(boxA: BoundingBox, boxB: BoundingBox): boolean {
-  const [ax1, ay1, ax2, ay2] = boxA.box
-  const [bx1, by1, bx2, by2] = boxB.box
+  const [, ay1, , ay2] = boxA.box
+  const [, by1, , by2] = boxB.box
 
   // 1. 计算两个框在 Y 轴上的投影重叠区域
   const overlapY1 = Math.max(ay1, by1)
@@ -521,16 +514,15 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
   const unmatchedValues = new Set(values)
 
   // 3.1 对 Name 进行分组，解决重复 Key 问题 (如两个"体重")
-  const groupedNames: Record<string, BoundingBox[]> = {}
+  const groupedNames: Record<string, BoundingBox[] | undefined> = {}
   names.forEach(box => {
     // 移除括号和空格，确保 key 干净
     const key = box.text?.replace(/[\s(%)（）]/g, '') ?? ''
     if (!key) return
 
     // ✅ 关键修复：如果数组不存在才创建，否则直接 push
-    if (!groupedNames[key]) {
-      groupedNames[key] = []
-    }
+    groupedNames[key] ??= []
+
     groupedNames[key].push(box)
   })
 
@@ -538,20 +530,22 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
   Object.keys(groupedNames).forEach(key => {
     const candidateNameBoxes = groupedNames[key]
     // 调试日志：看看究竟有几个框参与了竞争
-    console.log(`Key [${key}] 有 ${candidateNameBoxes.length} 个候选框参与匹配`)
+    console.log(
+      `Key [${key}] 有 ${candidateNameBoxes?.length.toString() ?? '0'} 个候选框参与匹配`
+    )
 
     let bestPair = {
       nameBox: null as BoundingBox | null,
       valueBox: null as BoundingBox | null,
       distance: Infinity
     }
-
+    if (!candidateNameBoxes) return
     // 让该 Key 下的所有候选框 (比如顶部的体重、列表的体重) 去竞争
     for (const nameBox of candidateNameBoxes) {
-      const [nx, ny, nright, nbottom] = nameBox.box
+      const [, , nright] = nameBox.box
 
       for (const valueBox of unmatchedValues) {
-        const [vx, vy, vright, vbottom] = valueBox.box
+        const [vx, , vright] = valueBox.box
 
         // --- 纯几何结构判断 ---
 
@@ -645,7 +639,7 @@ function pairAndParseResults(recognizedBoxes: BoundingBox[]) {
     bodyType: foundBodyType // 使用阶段2找到的体型
   }
 
-  const keywordMap: Record<string, keyof BodyMetrics> = {
+  const keywordMap: Record<string, keyof BodyMetrics | undefined> = {
     体重: 'weight',
     BMI: 'bmi',
     体脂率: 'bodyFatRate',
@@ -729,11 +723,6 @@ function drawBoxesOnImage(
     ctx.strokeStyle = color
     ctx.lineWidth = 2
     ctx.strokeRect(x1, y1, width, height)
-
-    // （可选）在框旁边写上标签，但我们现在是通用标签，意义不大
-    // ctx.fillStyle = color;
-    // ctx.font = '16px Arial';
-    // ctx.fillText(item.label, x1, y1 > 20 ? y1 - 5 : y1 + 15);
   }
 
   // 3. 返回图片的Data URL
@@ -844,12 +833,12 @@ export async function cropAndDownloadTrainingSet(
       ctx.drawImage(imageElement, x1, y1, width, height, 0, 0, width, height)
 
       // 将canvas内容转为Blob
-      const blob = await new Promise<Blob | null>(resolve =>
+      const blob = await new Promise<Blob | null>(resolve => {
         canvas.toBlob(resolve, 'image/png')
-      )
+      })
       if (blob) {
         // 使用唯一的临时文件名
-        const filename = `image_${index}_fixme.png`
+        const filename = `image_${index.toString()}_fixme.png`
         imagesFolder.file(filename, blob)
         // 为labels.txt添加一行，内容是 "images/filename.png [请在这里填写正确文本]"
         labelsContent.push(`images/${filename}\t[REPLACE_WITH_CORRECT_TEXT]`)

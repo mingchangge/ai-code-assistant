@@ -52,8 +52,8 @@ export async function runLayoutDetection(
   const padY = (inputSize - Math.round(h * scale)) / 2
 
   for (const boxData of rawBoxes) {
-    const [bx1, by1, bx2, by2, conf, cls] = boxData
-    console.log('检测到的框数据:', boxData, cls)
+    const [bx1, by1, bx2, by2, conf] = boxData
+
     if (conf < CONSTANTS.CONFIDENCE_THRESHOLD) continue
 
     const x1 = (bx1 - padX) / scale
@@ -67,6 +67,8 @@ export async function runLayoutDetection(
       confidence: conf
     })
   }
-
+  console.log(
+    `经过前端置信度过滤后，保留了 ${boxes.length.toString()} 个高质量的框`
+  )
   return boxes
 }
