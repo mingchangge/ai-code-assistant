@@ -184,7 +184,29 @@ const RecognitionController = ({
   // 模型加载完毕后，显示识别按钮
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px'
+        }}
+      >
+        <Space>
+          <Tooltip title="开启后可自动修正错别字（如'内脏指肪'），但首次运行需要下载模型">
+            <BulbOutlined style={{ color: '#faad14' }} />
+          </Tooltip>
+          <Text strong>AI 增强模式</Text>
+          <Switch
+            checkedChildren="ON"
+            unCheckedChildren="OFF"
+            checked={useRAG}
+            onChange={handleRAGToggle}
+            // 可以在识别中禁用开关
+            disabled={isRecognizing}
+          />
+        </Space>
+
         <Button
           type="primary"
           size="large"
@@ -194,20 +216,6 @@ const RecognitionController = ({
         >
           {isRecognizing ? 'AI 联合分析中...' : '开始智能识别'}
         </Button>
-        <Space>
-          <Text strong>AI 增强模式</Text>
-          <Tooltip title="开启后可自动修正错别字（如'内脏指肪'），但首次运行需要下载模型">
-            <BulbOutlined style={{ color: '#faad14' }} />
-          </Tooltip>
-        </Space>
-        <Switch
-          checkedChildren="ON"
-          unCheckedChildren="OFF"
-          checked={useRAG}
-          onChange={handleRAGToggle}
-          // 可以在识别中禁用开关
-          disabled={isRecognizing}
-        />
       </div>
       {/* 在这里显示调试图片！ */}
       {debugImage && (
