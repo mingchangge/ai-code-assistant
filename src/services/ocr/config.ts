@@ -14,7 +14,11 @@ export const CONSTANTS = {
   LAYOUT_INPUT_SIZE: 640, // 布局检测模型输入尺寸
   CONFIDENCE_THRESHOLD: 0.5 // 布局检测置信度阈值
 }
-
+// NMS (非极大值抑制) 配置
+export const LAYOUT_NMS = {
+  MAX_OUTPUT_SIZE: 200, // 最多保留多少个框
+  IOU_THRESHOLD: 0.65 // 重叠度超过 65% 认为是同一个物体
+}
 // 策略 A: 标准模式 (适合大多数情况，保留灰度细节以识别小数点)
 export const CONFIG_STANDARD: OcrConfig = {
   padLeft: 2,

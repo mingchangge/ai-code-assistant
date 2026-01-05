@@ -28,6 +28,10 @@ export interface BodyMetrics {
   muscleControl?: number
   bodyType?: string
 }
+
+export interface LayoutDetectionOptions {
+  scoreThreshold?: number // 允许 debug 模式动态调整
+}
 export interface RecognitionControllerProps {
   historyRecords: BodyMetrics[]
   isRecognizing: boolean
