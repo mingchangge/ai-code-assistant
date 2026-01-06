@@ -17,6 +17,7 @@ export default function LinearRegressionForPredictingHousePrices() {
       children: (
         <MdTabs
           mdMap={mdMap}
+          tabListHeight="calc(100vh - 218px)"
           docsPath="/views/TensorFlow/docs"
           containerHeight="calc(100vh - 218px)"
         />

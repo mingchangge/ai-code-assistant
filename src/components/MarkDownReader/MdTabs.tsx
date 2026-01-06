@@ -35,6 +35,11 @@ interface MdTabsProps {
    * 默认值：180
    */
   tabWidth?: number | string
+  /**
+   * 可选的标签列表高度参数，用于自定义标签列表高度
+   * 默认值：'100%'
+   */
+  tabListHeight?: string
 }
 
 /**
@@ -51,15 +56,19 @@ const formatFileName = (fileName: string): string => {
 }
 // 自定义标签容器样式
 const StyledTabs = styled(Tabs).withConfig({
-  shouldForwardProp: prop => !['tabWidth'].includes(prop)
+  shouldForwardProp: prop => !['tabWidth', 'tabListHeight'].includes(prop)
 })<{
   tabWidth?: number
+  tabListHeight?: string
 }>`
   height: 100%;
   .ant-tabs-tabpane {
     height: 100%;
   }
-
+  // 标签列表容器样式
+  .ant-tabs-nav {
+    height: ${props => props.tabListHeight ?? '100%'};
+  }
   // 标签项样式
   .tab-label {
     box-sizing: border-box;
@@ -81,7 +90,8 @@ export default function MdTabs({
   docsPath = '/assets/docs',
   tabPosition = 'left',
   containerHeight = 'calc(100vh - 168px)',
-  tabWidth = 120
+  tabWidth = 120,
+  tabListHeight = '100%'
 }: MdTabsProps) {
   const tabs: TabItem[] = useMemo(() => {
     return Object.entries(mdMap).map(([filePath, url]) => {
@@ -119,6 +129,7 @@ export default function MdTabs({
     <StyledTabs
       activeKey={activeKey}
       tabPosition={tabPosition}
+      tabListHeight={tabListHeight}
       style={{ height: '100%' }}
       onChange={setActiveKey}
       items={tabs.map(({ key, label, url }) => ({
