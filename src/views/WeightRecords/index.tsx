@@ -19,6 +19,7 @@ import HistoryRecords, {
 } from './components/HistoryRecords'
 import HistoryEcharts from './components/HistoryEcharts'
 import DataAnalysis from './components/DataAnalysis'
+import { HealthDashboard } from './components/HealthAnalysis'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -159,6 +160,16 @@ const ImageRecognition = () => {
                 label: '历史数据分析',
                 key: '3',
                 children: <DataAnalysis records={records} />
+              },
+              {
+                label: '健康分析',
+                key: '4',
+                children: (
+                  <HealthDashboard
+                    historyData={records}
+                    userProfile={{ age: 33, gender: 'female' }}
+                  />
+                )
               }
             ]}
           />

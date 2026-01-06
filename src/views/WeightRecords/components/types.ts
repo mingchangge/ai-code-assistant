@@ -1,5 +1,4 @@
 // 导入服务层定义的类型
-
 import type {
   BodyMetrics,
   RecognitionResult,
