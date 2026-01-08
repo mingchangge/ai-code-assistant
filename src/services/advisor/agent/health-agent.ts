@@ -153,8 +153,23 @@ export class HealthAgent {
       async (inputs: MetricTaskInput[]) => {
         const singleMetricChain = this.createMetricChain()
 
-        // Promise.all 实现真·并行
-        const promises = inputs.map(input => singleMetricChain.invoke(input))
+        // 使用 .map 生成一组 Promise
+        const promises = inputs.map(async input => {
+          try {
+            // 每个任务独立运行，如果出错，由这里捕获
+            return await singleMetricChain.invoke(input)
+          } catch (error) {
+            // ⚠️ 关键：捕获单项任务的错误，不抛出，而是返回 null
+            console.error(
+              `[Agent] Metric Analysis Failed for [${input.key}]:`,
+              error
+            )
+            // 可以选择返回 null，后续 filter 掉
+            // 也可以返回一个包含错误信息的 Result 对象（如果 UI 需要展示"分析失败"）
+            return null
+          }
+        })
+
         return await Promise.all(promises)
       }
     )
