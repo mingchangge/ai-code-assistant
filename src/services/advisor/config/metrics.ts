@@ -10,6 +10,12 @@ export const METRIC_CONFIG: MetricConfigMap = {
     label: '体重',
     unit: 'kg',
     type: 'trend_only',
+    //告诉 Agent，分析体重时，去查 'weight_trend' 这个分类，并且查询时使用 diff (变化值) 而不是 current (绝对值)
+    ragConfig: {
+      label: '体重变化',
+      category: 'weight_trend',
+      useDiffValue: true
+    },
     description: '体重只是数字，请结合体脂率和肌肉量综合看待。'
   },
   bmi: {

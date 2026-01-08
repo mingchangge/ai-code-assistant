@@ -25,30 +25,29 @@ export interface UserProfile {
 /**
  * 知识库条目接口
  */
+export interface MatchCriteria {
+  category: string // 必须与 Agent 的 MetricKey 完全一致 (e.g. 'bodyFatRate')
+  gender: 'male' | 'female' | 'all'
+  ageRange?: [number, number] // [min, max] (包含)，不传代表全年龄
+  valueRange?: [number, number] // [min, max] (包含)，不传代表通用建议
+  tags?: string[] // 辅助 LLM 检索的标签
+}
+
+// 2. 知识内容：面向 LLM 的结构化数据
+export interface KnowledgeContent {
+  interpretation: string // 现象解读 (直接展示给用户)
+  principle?: string // 原理 (给 LLM 看：为什么会这样？)
+  advice: string // 核心建议 (给用户看)
+  actions?: string[] // 行动清单 (给 LLM 选：具体怎么做)
+  warning?: string // 禁忌/警告 (给 LLM 做安全检查)
+}
+
+// 3. 知识条目实体
 export interface KnowledgeItem {
   id: string
-  category: string // 对应 MetricKey 的分类或通用分类
-  gender: 'female' | 'male' | 'all'
-  age_group?: string // 支持 "12-18", "50+", "all"
-
-  // 阈值匹配条件 (可选)
-  normal_min?: number
-  normal_max?: number
-  low_threshold?: number
-  high_threshold?: number
-  overweight_threshold?: number
-  obese_threshold?: number
-  bmi_min?: number
-  bmi_max?: number
-  athlete_range_min?: number
-  athlete_range_max?: number
-  // 输出内容
-  interpretation?: string
-  advice: string
-
-  // 其他元数据
-  symptoms?: string[]
-  [key: string]: unknown
+  criteria: MatchCriteria
+  content: KnowledgeContent
+  score?: number // 运行时计算的匹配度分数
 }
 
 /**
@@ -90,6 +89,11 @@ export interface MetricConfigItem {
   type: AnalysisType
   standard?: MetricStandard
   description?: string
+  ragConfig?: {
+    label: string
+    category: string
+    useDiffValue: boolean
+  }
 }
 export type MetricConfigMap = Record<MetricKey, MetricConfigItem>
 
