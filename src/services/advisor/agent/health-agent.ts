@@ -11,33 +11,10 @@ import type {
   MetricKey,
   HealthRecord,
   AnalysisResult,
-  MathResult,
-  MetricConfigItem
+  MetricTaskInput,
+  StateWithMath,
+  StateWithAll
 } from '../types'
-
-// --- 1. 定义链式调用的中间状态类型 (Interim State Types) ---
-
-// 阶段 1: 拆分后的单个任务输入
-interface MetricTaskInput {
-  key: MetricKey
-  values: number[]
-  userProfile: UserProfile
-  data: HealthRecord[] // 原始完整数据，用于绘图
-}
-
-// 阶段 2: 计算趋势后的状态
-interface StateWithMath {
-  mathResult: MathResult | null
-  input: MetricTaskInput
-}
-
-// 阶段 3: 包含 RAG 和 Chart 结果的完整状态
-interface StateWithAll extends StateWithMath {
-  ragResult: { advice: string; interpretation: string }
-  chartOption: Record<string, unknown> // ECharts Option 类型较复杂，通常 Record<string, unknown> 足够
-  metricKey: MetricKey
-  config: MetricConfigItem
-}
 
 export class HealthAgent {
   private vectorStore: HealthVectorStore

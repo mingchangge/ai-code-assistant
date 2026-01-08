@@ -60,7 +60,26 @@ export interface MathResult {
   // 这里的 status 是基于 Config 的通用判断，RAG 会有更细致的判断
   status: 'low' | 'normal' | 'high' | 'risk' | 'unknown'
 }
+export interface MetricTaskInput {
+  key: MetricKey
+  values: number[]
+  userProfile: UserProfile
+  data: HealthRecord[] // 原始完整数据，用于绘图
+}
 
+// 阶段 2: 计算趋势后的状态
+export interface StateWithMath {
+  mathResult: MathResult | null
+  input: MetricTaskInput
+}
+
+// 阶段 3: 包含 RAG 和 Chart 结果的完整状态
+export interface StateWithAll extends StateWithMath {
+  ragResult: { advice: string; interpretation: string }
+  chartOption: Record<string, unknown> // ECharts Option 类型较复杂，通常 Record<string, unknown> 足够
+  metricKey: MetricKey
+  config: MetricConfigItem
+}
 /**
  * 最终输出报告卡片
  */
@@ -76,7 +95,6 @@ export interface AnalysisResult {
   chartOption: Record<string, unknown> // ECharts Option
 }
 
-// ... 复用你之前的 Config 相关 Type ...
 export type AnalysisType = 'range' | 'max' | 'min' | 'trend_only' | 'info'
 export interface MetricStandard {
   min?: number
