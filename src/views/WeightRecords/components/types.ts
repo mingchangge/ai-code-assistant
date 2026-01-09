@@ -6,6 +6,8 @@ import type {
   BoundingBox
 } from '@/services/ocr/types'
 
+import type { UserProfile } from '@/services/advisor/types'
+
 export interface metricsConfigType {
   key: keyof BodyMetrics
   label: string
@@ -47,4 +49,9 @@ export type {
   RecognitionResult,
   ExtendedRecognitionResult,
   BoundingBox
+}
+
+export interface DashboardProps {
+  historyData: unknown[] | null
+  userProfile: UserProfile
 }

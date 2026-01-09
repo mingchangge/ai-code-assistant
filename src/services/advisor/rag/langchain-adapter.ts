@@ -1,5 +1,5 @@
 import { Embeddings, type EmbeddingsParams } from '@langchain/core/embeddings'
-import { embeddingEngine } from '../../ocr/rag/embedding-engine' // 引入你的单例
+import { embeddingEngine } from '../../ocr/rag/embedding-engine'
 
 /**
  * 适配器模式：

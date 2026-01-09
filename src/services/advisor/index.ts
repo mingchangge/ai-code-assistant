@@ -1,9 +1,6 @@
 import { HealthAgent } from './agent/health-agent'
+import { LLMService } from './core/llm-service'
 import type { UserProfile, AnalysisResult } from './types'
-
-// 1. 实例化 Agent (单例模式)
-// 如果 Agent 内部有较重的初始化逻辑(如加载模型)，单例可以避免重复开销
-const agentInstance = new HealthAgent()
 
 /**
  * 健康顾问服务 (Facade)
@@ -11,35 +8,54 @@ const agentInstance = new HealthAgent()
  */
 export const AdvisorService = {
   /**
-   * 运行全量健康分析
-   * @param rawData 原始数据 (通常是 OCR 或 CSV 解析后的 JSON)
-   * @param userProfile 用户画像 (用于匹配精准建议)
+   * 🆕 新增：预加载模型
+   * 用于在页面加载时静默启动 Worker 和编译 Shader
    */
-  async analyze(
-    rawData: unknown[],
-    userProfile: UserProfile
-  ): Promise<AnalysisResult[]> {
-    console.log(
-      `[AdvisorService] 开始分析，用户年龄: ${userProfile.age.toString()}`
-    )
-
-    // 这里可以加一层缓存逻辑、错误统一监控或者数据预处理
-    // 目前直接透传给 Agent
-    const results = await agentInstance.execute(rawData, userProfile)
-    if (!results) {
-      throw new Error('分析失败')
-    }
-    return results
-  }
+  async preload(onStatus?: (text: string) => void): Promise<void> {
+    const llm = LLMService.getInstance()
+    // 只做初始化，不生成报告
+    await llm.init(onStatus)
+  },
 
   /**
-   * 可以在这里扩展其他方法，例如：
-   * async exportReport(results) { ... }
-   * async getSupportedMetrics() { ... }
+   * 阶段 1: 基础分析 (CPU 密集，毫秒级)
+   * 返回结构化数据用于渲染左侧卡片
    */
+  async analyzeBasic(
+    historyData: unknown[],
+    userProfile: UserProfile
+  ): Promise<AnalysisResult[]> {
+    const agent = new HealthAgent()
+    return await agent.executeBasic(historyData, userProfile)
+  },
+
+  /**
+   * 阶段 2: AI 深度解读 (IO/显存密集，秒级)
+   * 依赖阶段 1 的结果作为 Context
+   */
+  async analyzeAI(
+    basicResults: AnalysisResult[],
+    userProfile: UserProfile,
+    onContent: (partialText: string) => void,
+    onStatus?: (statusText: string) => void
+  ): Promise<void> {
+    const llm = LLMService.getInstance()
+
+    // 1. 确保初始化 (如果之前调用过 preload，这里会瞬间返回，不会重复下载)
+    await llm.init(statusText => {
+      // 只有在真正需要加载时（未预热完成）才汇报进度
+      onStatus?.(statusText.replace('[100%]', '✅').replace('[0%]', '⏳'))
+      console.log('初始化状态:', statusText)
+    })
+
+    // 2. 预热/思考阶段
+    onStatus?.('💭 AI 正在深度思考中...')
+
+    // 3. 生成阶段
+    await llm.generateReport(basicResults, userProfile, onContent)
+  }
 }
 
-// 2. 统一导出类型，方便 UI 层引用
 export type {
   AnalysisResult,
   UserProfile,
