@@ -10,6 +10,7 @@ import {
   Card
 } from 'antd'
 import { ThunderboltOutlined, ReloadOutlined } from '@ant-design/icons'
+import StickyBox from 'react-sticky-box'
 import { AdvisorService, type AnalysisResult } from '@/services/advisor'
 import { AnalysisCard } from './AnalysisCard'
 import { AiReportView } from './AiReportView'
@@ -41,6 +42,7 @@ export const HealthDashboard = ({
   // --- 1. 初始化 & 预热 ---
   useEffect(() => {
     isMounted.current = true
+    let timer: number
 
     const initSequence = async () => {
       if (!historyData || historyData.length === 0) {
@@ -90,11 +92,13 @@ export const HealthDashboard = ({
         if (isMounted.current) setBasicLoading(false)
       }
     }
-
-    void initSequence()
-
+    timer = window.setTimeout(() => {
+      void initSequence()
+    }, 300)
     return () => {
       isMounted.current = false // 标记组件已卸载
+      window.clearTimeout(timer) // 清除定时器
+      timer = 0
     }
   }, [historyData, userProfile])
 
@@ -177,9 +181,7 @@ export const HealthDashboard = ({
     fontSize: '16px'
   }
   return (
-    // 使用 style 代替 className="pb-8" (32px)
     <div style={{ paddingBottom: 32 }}>
-      {/* 头部区域：使用 style 代替 mb-6 (24px) */}
       <div style={{ marginBottom: 24 }}>
         <Title level={4} style={{ margin: 0 }}>
           全维健康分析报告
@@ -190,7 +192,7 @@ export const HealthDashboard = ({
         </Text>
       </div>
 
-      <Row gutter={[24, 24]}>
+      <Row gutter={[24, 24]} align="stretch">
         {/* LEFT: 基础数据 */}
         <Col xs={24} lg={16} xl={17}>
           {basicLoading ? (
@@ -209,65 +211,67 @@ export const HealthDashboard = ({
         {/* RIGHT: AI 控制区与报告 */}
         <Col xs={24} lg={8} xl={7}>
           {/* 使用 style 实现 sticky 定位 */}
-          <div
-            style={{
-              position: 'sticky',
-              top: 16,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16
-            }}
-          >
-            {/* 1. 控制按钮卡片 */}
-            <Card style={{ boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-              <Button
-                type="primary"
-                block
-                icon={aiContent ? <ReloadOutlined /> : <ThunderboltOutlined />}
-                loading={!modelReady || isAnalyzing}
-                disabled={!modelReady && !modelError}
-                onClick={() => void handleStartAnalysis()}
-                style={buttonStyle}
-              >
-                {getButtonText()}
-              </Button>
-              {/* 仅在模型未就绪（还在下载）时显示提示 */}
-              {!modelReady && !modelError && (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    marginTop: 8,
-                    fontSize: 12,
-                    color: '#9ca3af'
-                  }}
+          <StickyBox offsetTop={16} offsetBottom={20}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16
+              }}
+            >
+              {/* 1. 控制按钮卡片 */}
+              <Card style={{ boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                <Button
+                  type="primary"
+                  block
+                  icon={
+                    aiContent ? <ReloadOutlined /> : <ThunderboltOutlined />
+                  }
+                  loading={!modelReady || isAnalyzing}
+                  disabled={!modelReady && !modelError}
+                  onClick={() => void handleStartAnalysis()}
+                  style={buttonStyle}
                 >
-                  🚧 首次运行需加载 AI 资源 (约900MB)，请保持网络通畅...
-                </div>
-              )}
-              {/* 辅助提示文案 */}
-              {!isAnalyzing && !aiContent && modelReady && (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    marginTop: 8,
-                    fontSize: 12,
-                    color: '#9ca3af' // 灰色
-                  }}
-                >
-                  ⚡️ 模型已就绪，点击即可秒级生成
-                </div>
-              )}
-            </Card>
+                  {getButtonText()}
+                </Button>
+                {/* 仅在模型未就绪（还在下载）时显示提示 */}
+                {!modelReady && !modelError && (
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      marginTop: 8,
+                      fontSize: 12,
+                      color: '#9ca3af'
+                    }}
+                  >
+                    🚧 首次运行需加载 AI 资源 (约900MB)，请保持网络通畅...
+                  </div>
+                )}
+                {/* 辅助提示文案 */}
+                {!isAnalyzing && !aiContent && modelReady && (
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      marginTop: 8,
+                      fontSize: 12,
+                      color: '#9ca3af' // 灰色
+                    }}
+                  >
+                    ⚡️ 模型已就绪，点击即可秒级生成
+                  </div>
+                )}
+              </Card>
 
-            {/* 2. 报告展示组件 */}
-            {(aiContent || isAnalyzing) && (
-              <AiReportView
-                content={aiContent}
-                loading={isAnalyzing}
-                loadingTip={aiStatus}
-              />
-            )}
-          </div>
+              {/* 2. 报告展示组件 */}
+              {(aiContent || isAnalyzing) && (
+                <AiReportView
+                  content={aiContent}
+                  loading={isAnalyzing}
+                  loadingTip={aiStatus}
+                />
+              )}
+            </div>
+          </StickyBox>
         </Col>
       </Row>
     </div>

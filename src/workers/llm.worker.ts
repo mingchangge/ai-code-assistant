@@ -51,10 +51,6 @@ const handleInit = async (msg: InitMessage) => {
         lastProgress = currentProgress
         lastText = report.text
 
-        console.log(
-          `⏳ [Worker] 加载: ${currentProgress.toFixed(2)}% - ${report.text}`
-        )
-
         self.postMessage({
           type: 'progress',
           progress: report.progress,
