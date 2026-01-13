@@ -1,5 +1,6 @@
 import type { AnalysisResult, UserProfile } from '../types'
 import { SYSTEM_PROMPT, buildUserPrompt } from '../agent/prompts'
+import { LLM_CONFIG } from '../config/llm-config'
 
 // 定义 Worker 返回的消息类型，增强代码提示
 type WorkerMessage =
@@ -93,9 +94,13 @@ export class LLMService {
 
       // ✅ 统一使用 addEventListener
       this.worker.addEventListener('message', initHandler)
-
+      console.log('[LLMService] 初始化参数:', LLM_CONFIG.VITE_USE_NETWORK_MODEL)
       // 发送初始化指令
-      this.worker.postMessage({ type: 'init', modelId: this.modelId })
+      this.worker.postMessage({
+        type: 'init',
+        modelId: this.modelId,
+        useNetworkModel: LLM_CONFIG.VITE_USE_NETWORK_MODEL
+      })
     })
 
     return this.initPromise
