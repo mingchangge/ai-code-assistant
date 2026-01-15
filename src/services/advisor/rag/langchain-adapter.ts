@@ -1,5 +1,5 @@
 import { Embeddings, type EmbeddingsParams } from '@langchain/core/embeddings'
-import { embeddingEngine } from '../../ocr/rag/embedding-engine'
+import { embeddingService } from '@/services/advisor/rag/embedding-service'
 
 /**
  * 适配器模式：
@@ -15,8 +15,8 @@ export class LangChainAdapter extends Embeddings {
    * LangChain 在存入知识库时会调用此方法
    */
   async embedDocuments(documents: string[]): Promise<number[][]> {
-    // 复用你的引擎，并发计算
-    const promises = documents.map(doc => embeddingEngine.embed(doc))
+    // 复用你的服务，并发计算
+    const promises = documents.map(doc => embeddingService.embed(doc))
     return Promise.all(promises)
   }
 
@@ -26,6 +26,6 @@ export class LangChainAdapter extends Embeddings {
    */
   async embedQuery(document: string): Promise<number[]> {
     // 复用你的引擎
-    return embeddingEngine.embed(document)
+    return embeddingService.embed(document)
   }
 }

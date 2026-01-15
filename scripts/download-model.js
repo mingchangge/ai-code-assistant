@@ -6,20 +6,43 @@ import { execSync } from 'child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// --- 1. 动态依赖加载器 (核心修复) ---
+// ==========================================
+// 配置模型下载
+// ==========================================
+
+// GitHub 加速代理 (根据需要开关)
+const GH_PROXY = 'https://ghproxy.net/';
+
+const MODELS_CONFIG = [
+    {
+        // 模型 1: Qwen2.5 (来自 GitHub Release)
+        name: "Qwen2.5-1.5B-Instruct-q4f32_1234", // 目标文件夹名
+        url: GH_PROXY + "https://github.com/mingchangge/ai-code-assistant/releases/download/v1.0-model/Qwen2.5-1.5B-Instruct-q4f32_1.zip"
+    },
+    {
+        // 模型 2: Embedding 模型 (建议打包成 ZIP 上传到同一个 Release)
+        // 这里的 dirName 要和代码里 EmbeddingEngine 的 modelName 一致
+        name: "paraphrase-multilingual-MiniLM-L12-v234",
+        url: GH_PROXY + "https://github.com/mingchangge/ai-code-assistant/releases/download/v1.0-model/paraphrase-multilingual-MiniLM-L12-v2.zip"
+    }
+];
+
+const MODELS_ROOT = path.join(__dirname, '../public/models');
+const MAX_RETRIES = 3; // 最大重试次数
+
+// ==========================================
+// 核心逻辑
+// ==========================================
+
+// 动态依赖加载
 async function loadAdmZip() {
     try {
-        // 尝试加载
         const module = await import('adm-zip');
         return module.default;
     } catch (e) {
         console.log('⚠️ 检测到未安装 adm-zip，正在临时安装...');
         try {
-            // 自动安装 (不写入 package.json)
             execSync('npm install adm-zip --no-save', { stdio: 'inherit' });
-            console.log('✅ adm-zip 安装完成');
-
-            // 安装后再次尝试加载
             const module = await import('adm-zip');
             return module.default;
         } catch (installError) {
@@ -29,141 +52,170 @@ async function loadAdmZip() {
     }
 }
 
-// --- 2. 主逻辑封装 (使用 Top-level Await) ---
-// Node.js v14.8+ 支持顶层 await，你的 v23 完全没问题
-const AdmZip = await loadAdmZip();
+// 主流程
+(async () => {
+    const AdmZip = await loadAdmZip();
 
-// 3. 配置信息
-const GH_PROXY = 'https://ghproxy.net/';
-const ORIGINAL_URL = "https://github.com/mingchangge/ai-code-assistant/releases/download/v1.0-model/Qwen2.5-1.5B-Instruct-q4f32_1.zip";
-const RELEASE_URL = GH_PROXY + ORIGINAL_URL;
-const MODEL_DIR_NAME = "Qwen2.5-1.5B-Instruct-q4f32_123"; // ⚠️ 注意：这里建议和压缩包内的文件夹名保持一致
-const MODELS_ROOT = path.join(__dirname, '../public/models');
-const TARGET_DIR = path.join(MODELS_ROOT, MODEL_DIR_NAME);
-const TEMP_ZIP_PATH = path.join(MODELS_ROOT, 'temp_model.zip');
-
-// 4. 检查是否已存在
-if (fs.existsSync(TARGET_DIR)) {
-    console.log(`✅ 模型目录已存在: ${TARGET_DIR}`);
-    console.log(`跳过下载。如果需要重新下载，请手动删除该目录。`);
-    process.exit(0);
-}
-
-// 确保父目录存在
-if (!fs.existsSync(MODELS_ROOT)) {
-    fs.mkdirSync(MODELS_ROOT, { recursive: true });
-}
-
-console.log(`📥 开始下载模型压缩包...\n🔗 ${RELEASE_URL}`);
-
-// 5. 下载文件
-const file = fs.createWriteStream(TEMP_ZIP_PATH);
-https.get(RELEASE_URL, (response) => {
-    // 检查重定向
-    if (response.statusCode === 302 || response.statusCode === 301) {
-        const newUrl = response.headers.location;
-        console.log(`🔀 跟随重定向...`);
-        https.get(newUrl, (res) => handleResponse(res));
-    } else {
-        handleResponse(response);
+    // 确保根目录存在
+    if (!fs.existsSync(MODELS_ROOT)) {
+        fs.mkdirSync(MODELS_ROOT, { recursive: true });
     }
-}).on('error', (err) => {
-    console.error(`❌ 下载请求失败: ${err.message}`);
-    cleanup();
-});
 
-function handleResponse(response) {
-    if (response.statusCode !== 200) {
-        console.error(`❌ 下载失败，状态码: ${response.statusCode}`);
-        cleanup();
+    console.log(`🚀 开始检查模型资源...`);
+
+    // 遍历配置，逐个处理
+    for (const config of MODELS_CONFIG) {
+        await processModel(config, AdmZip);
+    }
+
+    console.log(`\n🎉 所有模型处理完毕！`);
+})();
+
+// 处理单个模型
+async function processModel(config, AdmZip) {
+    const targetDir = path.join(MODELS_ROOT, config.name);
+    const tempZipPath = path.join(MODELS_ROOT, `temp_${config.name}.zip`);
+
+    console.log(`\n👉 正在处理: ${config.name}`);
+
+    // 1. 检查是否存在
+    if (fs.existsSync(targetDir)) {
+        console.log(`   ✅ 目录已存在，跳过下载`);
         return;
     }
 
-    const totalSize = parseInt(response.headers['content-length'], 10);
-    let downloaded = 0;
+    // 2. 下载 (带重试)
+    console.log(`   📥 准备下载...`);
+    try {
+        await downloadWithRetry(config.url, tempZipPath, MAX_RETRIES);
+    } catch (err) {
+        console.error(`   ❌ [失败] 无法下载 ${config.name}: ${err.message}`);
+        cleanup(tempZipPath);
+        process.exit(1); // 一个失败则整体退出，保证环境完整性
+    }
 
-    response.pipe(file);
+    // 3. 解压与部署
+    console.log(`   📦 下载完成，正在解压...`);
+    unzipAndDeploy(AdmZip, tempZipPath, targetDir, config.name);
+}
 
-    response.on('data', (chunk) => {
-        downloaded += chunk.length;
-        if (totalSize) {
-            const percent = ((downloaded / totalSize) * 100).toFixed(1);
-            process.stdout.write(`\r⏳ 下载进度: ${percent}% (${(downloaded / 1024 / 1024).toFixed(1)}MB)`);
-        }
-    });
+// 下载函数 (支持重试)
+function downloadWithRetry(url, destPath, retriesLeft) {
+    return new Promise((resolve, reject) => {
+        const attemptDownload = (n) => {
+            const file = fs.createWriteStream(destPath);
+            const request = https.get(url, (response) => {
+                // 处理重定向
+                if (response.statusCode === 302 || response.statusCode === 301) {
+                    const newUrl = response.headers.location;
+                    file.close();
+                    attemptDownload(n); // 重定向不算重试次数
+                    return;
+                }
 
-    file.on('finish', () => {
-        file.close();
-        console.log(`\n✅ 下载完成，正在解压...`);
-        unzipFile();
+                if (response.statusCode !== 200) {
+                    file.close();
+                    fs.unlinkSync(destPath); // 删除空文件
+                    const err = new Error(`HTTP Status ${response.statusCode}`);
+                    handleError(err, n);
+                    return;
+                }
+
+                const totalSize = parseInt(response.headers['content-length'], 10);
+                let downloaded = 0;
+
+                response.pipe(file);
+
+                response.on('data', (chunk) => {
+                    downloaded += chunk.length;
+                    if (totalSize) {
+                        const percent = ((downloaded / totalSize) * 100).toFixed(0);
+                        process.stdout.write(`\r   ⏳ 进度: ${percent}% (${(downloaded / 1024 / 1024).toFixed(1)}MB) `);
+                    }
+                });
+
+                file.on('finish', () => {
+                    file.close();
+                    process.stdout.write('\n'); // 换行
+                    resolve();
+                });
+
+                file.on('error', (err) => {
+                    file.close();
+                    fs.unlinkSync(destPath);
+                    handleError(err, n);
+                });
+            });
+
+            request.on('error', (err) => {
+                file.close();
+                if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+                handleError(err, n);
+            });
+        };
+
+        const handleError = (err, n) => {
+            if (n > 0) {
+                console.log(`\n   ⚠️ 发生错误: ${err.message}`);
+                console.log(`   🔄 3秒后重试... (剩余 ${n} 次)`);
+                setTimeout(() => attemptDownload(n - 1), 3000);
+            } else {
+                reject(err);
+            }
+        };
+
+        attemptDownload(retriesLeft);
     });
 }
 
-// 6. 解压文件
-function unzipFile() {
-    // 定义一个临时的中转目录，确保不污染现有文件夹
-    const STAGING_DIR = path.join(MODELS_ROOT, 'temp_staging_area');
+// 解压与安全部署
+function unzipAndDeploy(AdmZip, zipPath, targetDir, modelName) {
+    const stagingDir = path.join(MODELS_ROOT, `staging_${modelName}`);
 
     try {
-        const zip = new AdmZip(TEMP_ZIP_PATH);
+        const zip = new AdmZip(zipPath);
 
-        // 1. 清理并创建中转目录
-        if (fs.existsSync(STAGING_DIR)) {
-            fs.rmSync(STAGING_DIR, { recursive: true, force: true });
+        // 清理中转区
+        if (fs.existsSync(stagingDir)) {
+            fs.rmSync(stagingDir, { recursive: true, force: true });
         }
-        fs.mkdirSync(STAGING_DIR);
+        fs.mkdirSync(stagingDir);
 
-        console.log(`📦 正在解压到临时中转区...`);
-        // 解压到 public/models/temp_staging_area
-        zip.extractAllTo(STAGING_DIR, true);
+        // 解压到中转区
+        zip.extractAllTo(stagingDir, true);
 
-        // 2. 寻找解压后的真实根目录
-        // 通常 ZIP 包里包含一个顶层文件夹 (例如 Qwen2.5..._1)
-        const files = fs.readdirSync(STAGING_DIR);
-        let extractedRoot = STAGING_DIR;
-
-        // 如果解压出来只有一个文件夹，说明 ZIP 包带了根目录
-        if (files.length === 1 && fs.statSync(path.join(STAGING_DIR, files[0])).isDirectory()) {
-            extractedRoot = path.join(STAGING_DIR, files[0]);
-            console.log(`🔍 识别到压缩包内原名: ${files[0]}`);
+        // 智能识别根目录 (处理 zip 包里是否套了一层文件夹的情况)
+        const files = fs.readdirSync(stagingDir);
+        let extractedRoot = stagingDir;
+        if (files.length === 1 && fs.statSync(path.join(stagingDir, files[0])).isDirectory()) {
+            extractedRoot = path.join(stagingDir, files[0]);
+            console.log(`   🔍 识别到内部目录: ${files[0]}`);
         }
 
-        // 3. 移动并重命名为目标名称 (_123)
-        // 这一步实现了：把 "原名" 变成 "你想要的名字"
-        console.log(`📝 正在重命名并部署到: ${MODEL_DIR_NAME}`);
-
-        // 确保目标位置是空的
-        if (fs.existsSync(TARGET_DIR)) {
-            fs.rmSync(TARGET_DIR, { recursive: true, force: true });
+        // 移动到最终目标
+        if (fs.existsSync(targetDir)) {
+            fs.rmSync(targetDir, { recursive: true, force: true });
         }
+        fs.renameSync(extractedRoot, targetDir);
 
-        // 执行移动 (Rename 操作在同一磁盘下即为移动)
-        fs.renameSync(extractedRoot, TARGET_DIR);
-
-        // 4. 清理工作
-        // 删除剩下的空的中转目录
-        if (fs.existsSync(STAGING_DIR)) {
-            fs.rmSync(STAGING_DIR, { recursive: true, force: true });
+        // 清理
+        if (fs.existsSync(stagingDir)) {
+            fs.rmSync(stagingDir, { recursive: true, force: true });
         }
-        cleanup(); // 删除 zip 包
+        cleanup(zipPath);
 
-        console.log(`🚀 模型部署完成！`);
-        console.log(`📁 路径: ${TARGET_DIR}`);
+        console.log(`   ✅ 部署成功: ${targetDir}`);
 
     } catch (err) {
-        console.error(`❌ 解压部署失败: ${err.message}`);
-        // 出错时尝试清理中转区
-        if (fs.existsSync(STAGING_DIR)) {
-            fs.rmSync(STAGING_DIR, { recursive: true, force: true });
-        }
-        cleanup();
+        console.error(`   ❌ 解压失败: ${err.message}`);
+        if (fs.existsSync(stagingDir)) fs.rmSync(stagingDir, { recursive: true, force: true });
+        cleanup(zipPath);
+        process.exit(1);
     }
 }
 
-
-function cleanup() {
-    if (fs.existsSync(TEMP_ZIP_PATH)) {
-        fs.unlinkSync(TEMP_ZIP_PATH);
-        // console.log(`🧹 已删除临时压缩包`);
+function cleanup(filePath) {
+    if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
     }
 }
