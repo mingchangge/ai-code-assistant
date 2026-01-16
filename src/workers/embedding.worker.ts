@@ -30,6 +30,7 @@ declare const self: DedicatedWorkerGlobalScope
 
 async function initPipeline() {
   if (extractor) {
+    self.postMessage({ type: 'progress', progress: 100, status: 'ready' })
     self.postMessage({ type: 'init-done' })
     return
   }

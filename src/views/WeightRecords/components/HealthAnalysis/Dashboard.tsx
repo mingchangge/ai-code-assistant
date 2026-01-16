@@ -7,7 +7,8 @@ import {
   Empty,
   Alert,
   Typography,
-  Card
+  Card,
+  Space
 } from 'antd'
 import { ThunderboltOutlined, ReloadOutlined } from '@ant-design/icons'
 import StickyBox from 'react-sticky-box'
@@ -28,7 +29,10 @@ export const HealthDashboard = ({
   const [error, setError] = useState<string | null>(null)
 
   // AI 相关状态
-  const [downloadProgress, setDownloadProgress] = useState('') // 模型下载进度
+  const [loadStatus, setLoadStatus] = useState({
+    llm: '', // 大模型进度
+    rag: '' // 向量模型进度
+  }) // 模型下载进度
   const [aiContent, setAiContent] = useState<string>('')
   const [aiStatus, setAiStatus] = useState<string>('')
   const [modelReady, setModelReady] = useState(false) // 模型是否预热完成
@@ -40,118 +44,186 @@ export const HealthDashboard = ({
   const lastUpdateRef = useRef(0)
   const isMounted = useRef(true) // 🔒 安全锁：防止卸载后更新状态
 
-  // --- 1. 初始化 & 预热 ---
+  // 🟢 核心: 流水线控制 (Charts + RAG -> LLM)
   useEffect(() => {
     isMounted.current = true
-    let timer: number
+    let isPipelineActive = true
 
-    const initSequence = async () => {
+    const runPipeline = async () => {
       if (!historyData || historyData.length === 0) {
         setReports([])
         return
       }
 
+      // 1. 初始化状态
       setBasicLoading(true)
       setError(null)
-      // 重置 AI 状态
-      setAiContent('')
-      setAiStatus('')
       setModelError(false)
+      setAiContent('')
+
+      const handleStatusUpdate = (status: string) => {
+        if (!isMounted.current) return
+        const translated = translateProgress(status)
+        if (status.startsWith('[LLM]')) {
+          setLoadStatus(prev => ({ ...prev, llm: translated }))
+        } else if (status.startsWith('[RAG]')) {
+          setLoadStatus(prev => ({ ...prev, rag: translated }))
+        }
+      }
 
       try {
-        // A. 基础数据 (同步显示)
-        const basicResults = await AdvisorService.analyzeBasic(
+        console.log('🚀 [Pipeline] 阶段一：并行加载图表与知识库')
+
+        // --- 阶段一：并行任务 ---
+
+        // 任务 A: 仅创建 Promise，不在此处处理 .then，交给后面统一处理
+        const chartsPromise = AdvisorService.analyzeBasic(
           historyData,
           userProfile
         )
 
-        if (isMounted.current) {
-          setReports(basicResults)
+        // 任务 B: RAG 初始化
+        const ragPromise = AdvisorService.initKnowledgeBase(handleStatusUpdate)
+
+        // 等待阶段一全部完成 (无论成功失败，这里都不会抛错)
+        const [chartsResult, ragResult] = await Promise.allSettled([
+          chartsPromise,
+          ragPromise
+        ])
+
+        // 🛡️ 检查组件是否还挂载
+        if (!isMounted.current || !isPipelineActive) return
+
+        // 🟢 逻辑分支 1：处理图表结果
+        if (chartsResult.status === 'fulfilled') {
+          // 成功：渲染图表
+          setReports(chartsResult.value)
           setBasicLoading(false)
+        } else {
+          // 失败：显示基础服务错误，并终止后续流程
+          console.error('Charts Analysis Failed:', chartsResult.reason)
+          setError('基础数据分析服务不可用')
+          setBasicLoading(false)
+          return // 🚨 图表挂了，就不继续加载 LLM 了
         }
 
-        // B. 模型预热 (后台静默运行)
-        if (basicResults.length > 0) {
-          try {
-            await AdvisorService.preload(status => {
-              // 1. 检查组件是否还在 (防止卸载后更新报错)
-              if (!isMounted.current) return
-
-              // 2. 翻译并更新 State，这样界面才会变
-              const translated = translateProgress(status)
-              setDownloadProgress(translated)
-            })
-            if (isMounted.current) {
-              setModelReady(true)
-              console.log('✅ AI 模型预热完毕')
-              setDownloadProgress('') // 清空进度文案
-            }
-          } catch (e) {
-            console.error('预热失败', e)
-            if (isMounted.current) setModelError(true)
-          }
+        // 🟢 逻辑分支 2：处理 RAG 结果 (可选：如果 RAG 挂了，是否继续？)
+        if (ragResult.status === 'rejected') {
+          console.error('RAG Init Failed:', ragResult.reason)
+          // RAG 挂了通常意味着 AI 无法正常工作，标记模型错误
+          setModelError(true)
+          return // 🚨 终止流程
         }
+
+        console.log('🚀 [Pipeline] 阶段二：加载 AI 思考引擎 (LLM)')
+
+        // --- 阶段二：串行任务 ---
+        // 只有上面两个都成功了，才会走到这里
+        await AdvisorService.initReasoningEngine(handleStatusUpdate)
       } catch (err) {
-        console.error(err)
-        if (isMounted.current) setError('基础数据分析服务不可用。')
-      } finally {
-        if (isMounted.current) setBasicLoading(false)
+        // 这里的 catch 现在只负责捕获 "阶段二 (LLM)" 的错误
+        // 因为阶段一的错误已经被 allSettled 处理掉了
+        console.error('Pipeline Stage 2 Error:', err)
+        if (isMounted.current && isPipelineActive) {
+          setModelError(true)
+        }
       }
     }
-    timer = window.setTimeout(() => {
-      void initSequence()
-    }, 300)
+
+    void runPipeline()
+
     return () => {
-      isMounted.current = false // 标记组件已卸载
-      window.clearTimeout(timer) // 清除定时器
-      timer = 0
+      isMounted.current = false
+      isPipelineActive = false
     }
   }, [historyData, userProfile])
+
+  // 🟢 辅助 Effect: 只要状态文案变绿，强制解锁按钮
+  useEffect(() => {
+    const ragReady =
+      loadStatus.rag.includes('准备就绪') || loadStatus.rag.includes('ready')
+    const llmReady = loadStatus.llm.includes('加载完毕')
+
+    if (ragReady && llmReady && !modelReady) {
+      setModelReady(true)
+    }
+  }, [loadStatus, modelReady])
 
   // 🛠️ 辅助函数：将英文日志翻译成友好的中文
   const translateProgress = (text: string) => {
     if (!text) return ''
+    // =================================================
+    // 🤖 分支 A: 处理 LLM (千问大模型)
+    // =================================================
+    if (text.startsWith('[LLM]')) {
+      const content = text.replace('[LLM] ', '')
 
-    // 🟢 1. 优先处理：缓存加载 (修复 0% -> 100% 跳变的问题)
-    // 原始日志: "Loading model from cache[5/30]: 0MB loaded. 0% completed..."
-    const cacheMatch = /Loading model from cache\[(\d+)\/(\d+)\]/.exec(text)
-    if (cacheMatch) {
-      const current = parseInt(cacheMatch[1], 10)
-      const total = parseInt(cacheMatch[2], 10)
-      // 手动计算百分比
-      const percent = Math.floor((current / total) * 100)
-      return `💾 正在校验本地缓存... ${percent.toFixed(0)}%`
+      // 1. 缓存加载
+      const cacheMatch = /Loading model from cache\[(\d+)\/(\d+)\]/.exec(
+        content
+      )
+      if (cacheMatch) {
+        const current = parseInt(cacheMatch[1], 10)
+        const total = parseInt(cacheMatch[2], 10)
+        const percent = Math.floor((current / total) * 100)
+        return `🤖 [AI引擎] 校验缓存... ${percent.toFixed(0)}%`
+      }
+
+      // 2. 网络下载
+      const fetchMatch = /(\d+)% completed/.exec(content)
+      if (fetchMatch && content.includes('fetched')) {
+        return `🤖 [AI引擎] 正在下载... ${fetchMatch[1]}%`
+      }
+
+      if (content.includes('Loading GPU shader'))
+        return '⚡️ [AI引擎] 编译着色器...'
+      if (content.includes('Finish loading')) return '✅ [AI引擎] 加载完毕'
+
+      return `🤖 ${content}`
     }
 
-    // 🟢 2. 处理：GPU Shader 编译 (通常是最后一步)
-    if (text.includes('Loading GPU shader modules')) {
-      return '⚡️ 正在编译 GPU 着色器...'
-    }
+    // =================================================
+    // 📚 分支 B: 处理 RAG (向量化模型)
+    // =================================================
+    if (text.startsWith('[RAG]')) {
+      const parts = text.replace('[RAG] ', '').split('|')
+      const status = parts[0]
+      const progress = parts[1] || '0'
+      const numProgress = parseFloat(progress)
 
-    // 🟢 3. 处理：网络下载
-    // 原始日志: "... 26MB fetched. 3% completed"
-    const fetchMatch = /(\d+)% completed/.exec(text)
-    if (fetchMatch) {
-      const percent = fetchMatch[1]
-      // 只有当文本包含 'fetched' (下载) 或者 percent > 0 时才显示下载
-      // 避免缓存加载时的 "0% completed" 误入这里
-      if (text.includes('fetched') || parseInt(percent) > 0) {
-        return `📥 正在下载模型资源... ${percent}%`
+      if (status === 'ready') {
+        return '✅ [知识库] 准备就绪'
+      }
+
+      // 🟢 状态 2: 中间态 (下载完了，正在编译/加载 WASM)
+      // 此时进度已达 100，但状态还是 loading
+      if (numProgress >= 100) {
+        return '⚙️ 模型下载完毕，正在加载模型资源...'
+      }
+      switch (status) {
+        case 'checking-network':
+          return '🔍 [知识库] 连接网络...'
+        case 'switching-local':
+          return '🏠 [知识库] 切换本地模式...'
+        case 'loading':
+          return `📥 [知识库] 加载资源... ${progress}%`
+        case 'ready':
+          return '✅ [知识库] 准备就绪'
+        default:
+          return `📚 [知识库] ${status}...`
       }
     }
 
-    // 🟢 4. 其他状态映射
-    if (text.includes('Start to fetch')) return '🚀 开始建立连接...'
-    if (text.includes('Finish loading')) return '✅ 模型加载完成，即将开始...'
-
-    return text // 兜底显示原文
+    // 兜底显示原文
+    return text
   }
 
   // --- 2. 按钮点击处理 ---
   const handleStartAnalysis = async () => {
     if (isAnalyzing) return // 防止连点
 
-    setDownloadProgress('🚀 正在启动 AI 引擎...') // 初始文案
+    // 初始文案
+    setLoadStatus(prev => ({ ...prev, llm: '🚀 正在启动 AI 引擎...' }))
     // 重置错误状态，给 LLMService 一个重试的机会
     setModelError(false)
     setIsAnalyzing(true)
@@ -162,7 +234,7 @@ export const HealthDashboard = ({
     if (!modelReady) {
       setAiStatus('正在完成模型最后加载...')
     } else {
-      setAiStatus('正在深度阅读您的体征数据...')
+      setAiStatus('💭 AI 正在深度思考中...')
     }
 
     try {
@@ -186,8 +258,11 @@ export const HealthDashboard = ({
         status => {
           // 拦截状态文本，进行翻译并设置到 state
           const translated = translateProgress(status)
-          setDownloadProgress(translated)
-          if (isMounted.current) setAiStatus(status)
+          if (status.startsWith('[LLM]')) {
+            setLoadStatus(prev => ({ ...prev, llm: translated }))
+          } else if (status.startsWith('[RAG]')) {
+            setLoadStatus(prev => ({ ...prev, rag: translated }))
+          }
         }
       )
     } catch (e) {
@@ -234,6 +309,11 @@ export const HealthDashboard = ({
     fontSize: '16px',
     transition: 'all 0.3s'
   }
+
+  // 🟢 辅助变量：是否显示进度区域
+  const showProgress =
+    !modelReady && !modelError && (loadStatus.llm || loadStatus.rag)
+
   return (
     <div style={{ paddingBottom: 32 }}>
       <div style={{ marginBottom: 24 }}>
@@ -288,19 +368,36 @@ export const HealthDashboard = ({
                 >
                   {getButtonText()}
                 </Button>
-                {!modelReady && !modelError && downloadProgress && (
+                {showProgress && (
                   <div style={{ marginTop: 12 }}>
-                    {/* 方案 A: 纯文字提示 */}
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: '#1677ff',
-                        textAlign: 'center',
-                        transition: 'all 0.3s'
-                      }}
+                    <Space
+                      direction="vertical"
+                      style={{ width: '100%' }}
+                      size={4}
                     >
-                      {downloadProgress}
-                    </div>
+                      {loadStatus.rag && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: '#13c2c2',
+                            textAlign: 'center'
+                          }}
+                        >
+                          {loadStatus.rag}
+                        </div>
+                      )}
+                      {loadStatus.llm && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: '#1677ff',
+                            textAlign: 'center'
+                          }}
+                        >
+                          {loadStatus.llm}
+                        </div>
+                      )}
+                    </Space>
                   </div>
                 )}
                 {/* 仅在模型未就绪（还在下载）时显示提示 */}

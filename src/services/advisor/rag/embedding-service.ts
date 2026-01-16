@@ -3,27 +3,27 @@ import type {
   EmbeddingWorkerResponse
 } from '@/workers/embedding.worker'
 
+type ProgressCallback = (progress: number, status: string) => void
+
 class EmbeddingService {
   private static instance: EmbeddingService | null = null
   private worker: Worker | null = null
-
-  // Promise 锁：处理初始化状态
   private initPromise: Promise<void> | null = null
 
-  // 请求队列：处理并发的 embed 请求 (id -> resolve/reject)
+  // 使用数组存储所有监听者（观察者模式）
+  private listeners: ProgressCallback[] = []
+
+  // 状态缓存
+  private isReady = false
+  private lastProgress = { percent: 0, status: '' }
+
   private pendingRequests = new Map<
     string,
-    {
-      resolve: (vec: number[]) => void
-      reject: (err: Error) => void
-    }
+    { resolve: (vec: number[]) => void; reject: (err: Error) => void }
   >()
 
-  // 进度回调
-  public onProgress: ((progress: number, status: string) => void) | null = null
-
   private constructor() {
-    // 初始化时创建 Worker
+    // 占位
   }
 
   public static getInstance(): EmbeddingService {
@@ -31,11 +31,55 @@ class EmbeddingService {
     return EmbeddingService.instance
   }
 
+  // 🟢 新增：公开的就绪状态查询
+  public get isModelReady(): boolean {
+    return this.isReady
+  }
+
   /**
-   * 初始化 Worker 并启动模型
+   * 🟢 核心修改：添加监听器（支持多个组件同时监听）
+   * 并且：一旦添加，立即回放最新状态！
    */
+  public addListener(callback: ProgressCallback): () => void {
+    this.listeners.push(callback)
+
+    // 立即回放当前状态，防止 UI 错过
+    if (this.lastProgress.status) {
+      // console.log('[EmbeddingService] Replaying status to new listener:', this.lastProgress)
+      callback(this.lastProgress.percent, this.lastProgress.status)
+    }
+
+    // 返回卸载函数
+    return () => {
+      this.listeners = this.listeners.filter(cb => cb !== callback)
+    }
+  }
+
+  /**
+   * 🟢 私有：通知所有监听者
+   */
+  private notifyListeners(progress: number, status: string) {
+    this.lastProgress = { percent: progress, status }
+
+    this.listeners.forEach(cb => {
+      cb(progress, status)
+    })
+  }
+
   public async init(): Promise<void> {
-    if (this.initPromise) return this.initPromise
+    if (this.initPromise) {
+      if (this.isReady) {
+        this.notifyListeners(100, 'ready')
+      } else if (this.lastProgress.status) {
+        this.notifyListeners(
+          this.lastProgress.percent,
+          this.lastProgress.status
+        )
+      }
+      return this.initPromise
+    }
+
+    this.notifyListeners(0, 'checking-network')
 
     this.worker = new Worker(
       new URL('@/workers/embedding.worker.ts', import.meta.url),
@@ -48,16 +92,17 @@ class EmbeddingService {
         return
       }
 
-      // 监听 Worker 消息
       this.worker.onmessage = (e: MessageEvent<EmbeddingWorkerResponse>) => {
         const msg = e.data
-
         switch (msg.type) {
           case 'progress':
-            this.onProgress?.(msg.progress, msg.status)
+            // 广播给 UI
+            this.notifyListeners(msg.progress, msg.status)
             break
 
           case 'init-done':
+            this.isReady = true
+            this.notifyListeners(100, 'ready')
             resolve()
             break
 
@@ -71,41 +116,28 @@ class EmbeddingService {
           }
 
           case 'error': {
-            // 如果是初始化阶段报错
             console.error('[Embedding Service] Worker Error:', msg.error)
-            // 如果有待处理的请求，全部拒绝
             this.pendingRequests.forEach(req => {
               req.reject(new Error(msg.error))
             })
             this.pendingRequests.clear()
-            // 如果还没初始化完
-            // 注意：这里 reject 可能会触发 Unhandled Promise Rejection，需上层捕获
             break
           }
         }
       }
 
-      // 发送初始化指令
       this.worker.postMessage({ type: 'init' } as EmbeddingWorkerMessage)
     })
 
     return this.initPromise
   }
 
-  /**
-   * 调用 Worker 进行向量化
-   */
   public async embed(text: string): Promise<number[]> {
-    if (!this.worker || !this.initPromise) {
-      await this.init()
-    }
-    await this.initPromise // 确保初始化完成
-
+    if (!this.worker || !this.initPromise) await this.init()
+    await this.initPromise
     return new Promise<number[]>((resolve, reject) => {
-      const id = crypto.randomUUID() // 生成唯一 ID 匹配请求和响应
-
+      const id = crypto.randomUUID()
       this.pendingRequests.set(id, { resolve, reject })
-
       this.worker?.postMessage({
         type: 'embed',
         text,
@@ -118,6 +150,8 @@ class EmbeddingService {
     this.worker?.terminate()
     this.worker = null
     this.initPromise = null
+    this.isReady = false
+    this.listeners = [] // 清空监听者
     this.pendingRequests.clear()
   }
 }
