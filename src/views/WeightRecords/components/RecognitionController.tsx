@@ -214,7 +214,11 @@ const RecognitionController = ({
           onClick={() => void onRecognize()}
           disabled={!selectedImage || isRecognizing}
         >
-          {isRecognizing ? 'AI 联合分析中...' : '开始智能识别'}
+          {isRecognizing
+            ? useRAG
+              ? 'AI 联合分析中...'
+              : '分析中'
+            : '开始智能识别'}
         </Button>
       </div>
       {/* 在这里显示调试图片！ */}
