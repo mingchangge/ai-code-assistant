@@ -85,7 +85,13 @@ const metricsConfig: metricsConfigType[] = [
     unit: '%',
     precision: 2
   },
-
+  {
+    key: 'muscleRate',
+    label: '肌肉率',
+    type: 'number',
+    unit: '%',
+    precision: 2
+  },
   {
     key: 'visceralFatIndex',
     label: '内脏脂肪指数',
