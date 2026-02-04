@@ -95,13 +95,14 @@ export default function serveDocsImages(
           try {
             const referer = new URL(req.headers.referer)
             console.log('referer', referer)
-            const pathname = referer.pathname
-            console.log('referer.pathname', pathname)
+            let pathname = referer.pathname
+            pathname = pathname.replace(/-([a-z])/g, g => g[1].toUpperCase())
             //将referer.pathname的图片路径可能性拼接成数组
             const pathArray = [
-              `/views/${pathname}/docs/images`,
-              `/views/${pathname}/images`
+              `/views${pathname}/docs/images`,
+              `/views${pathname}/images`
             ]
+            console.log('referer.pathname', pathArray)
             // 遍历pathArray，将每个路径映射到本地目录
             pathArray.forEach(path => {
               const localDir = mapPath(path)
