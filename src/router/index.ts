@@ -59,6 +59,9 @@ const wrapWithSuspense = <T = DefaultProps>(
 // 路由懒加载
 const MainLayout = wrapWithSuspense(() => import('@/layout/MainLayout'))
 const Home = wrapWithSuspense(() => import('@/views/Home/index'))
+const SoftwareEngineerExam = wrapWithSuspense(
+  () => import('@/views/SoftwareEngineerExam/index')
+)
 
 const MonacoEsbuildWasm = wrapWithSuspense(
   () => import('@/views/MonacoEsbuildWasm/index')
@@ -116,6 +119,10 @@ const routes: RouteObject[] = [
     children: [
       // 关键：默认子路由（匹配/时，<Outlet />渲染Home）
       { index: true, element: createElement(Home) },
+      {
+        path: '/software-engineer-exam',
+        element: createElement(SoftwareEngineerExam)
+      },
       {
         path: '/multi-spark-code',
         element: createElement(MultiSparkCode)

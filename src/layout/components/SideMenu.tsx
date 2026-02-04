@@ -1,8 +1,18 @@
 import { Menu, type MenuProps } from 'antd'
 import {
+  AmazonOutlined,
+  AndroidOutlined,
   DashboardOutlined,
+  DropboxOutlined,
+  FieldNumberOutlined,
+  HourglassOutlined,
   InfoCircleOutlined,
-  ShoppingOutlined
+  JavaScriptOutlined,
+  RadarChartOutlined,
+  RubyOutlined,
+  SignatureOutlined,
+  ShoppingOutlined,
+  SlackOutlined
 } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 
@@ -28,26 +38,32 @@ const SideMenu = () => {
       path: '/'
     },
     {
+      key: 'software-engineer-exam',
+      icon: <RadarChartOutlined />,
+      label: '软考中级',
+      path: '/software-engineer-exam'
+    },
+    {
       key: 'js-new-features',
-      icon: <ShoppingOutlined />,
+      icon: <JavaScriptOutlined />,
       label: 'JavaScript 新特性',
       path: '/js-new-features'
     },
     {
       key: 'machine-learning',
-      icon: <InfoCircleOutlined />,
+      icon: <AndroidOutlined />,
       label: '机器学习',
       path: '/machine-learning'
     },
     {
       key: 'tensorflow',
-      icon: <InfoCircleOutlined />,
+      icon: <RubyOutlined />,
       label: 'TensorFlow示例',
       path: '/tensorflow'
     },
     {
       key: 'ai-code-generator',
-      icon: <InfoCircleOutlined />,
+      icon: <DropboxOutlined />,
       label: 'AI代码生成',
       children: [
         {
@@ -73,7 +89,7 @@ const SideMenu = () => {
 
     {
       key: 'code-demo',
-      icon: <InfoCircleOutlined />,
+      icon: <AmazonOutlined />,
       label: '代码编辑和预览',
       children: [
         {
@@ -110,19 +126,19 @@ const SideMenu = () => {
     },
     {
       key: 'react-basics',
-      icon: <ShoppingOutlined />,
+      icon: <SignatureOutlined />,
       label: 'React 基础',
       path: '/react-basics'
     },
     {
       key: 'fixed-equation-visualizer',
-      icon: <ShoppingOutlined />,
+      icon: <SlackOutlined />,
       label: '方程可视化',
       path: '/fixed-equation-visualizer'
     },
     {
       key: 'weight-tracker-page',
-      icon: <InfoCircleOutlined />,
+      icon: <FieldNumberOutlined />,
       label: '体重跟踪',
       children: [
         {
@@ -153,7 +169,7 @@ const SideMenu = () => {
     },
     {
       key: 'IPFS',
-      icon: <InfoCircleOutlined />,
+      icon: <HourglassOutlined />,
       label: 'IPFS 示例',
       path: '/IPFS'
     }
