@@ -41,13 +41,12 @@ export const useMarkdownContent = (fileName: string, docsPath: string) => {
       })
   }, [fileName, docsPath])
 
+  const reloadContent = useCallback(() => {
+    loadContent()
+  }, [loadContent])
   // 仅在fileName变化时加载内容
   useEffect(() => {
     loadContent()
-    // 监听HMR
-    if (import.meta.hot) {
-      import.meta.hot.on('vite:beforeUpdate', loadContent)
-    }
   }, [loadContent])
 
   // 渲染内容到DOM
@@ -79,6 +78,7 @@ export const useMarkdownContent = (fileName: string, docsPath: string) => {
     articleRef,
     headingsRef,
     documentImageCount,
-    clearDocumentCache
+    clearDocumentCache,
+    reloadContent
   }
 }

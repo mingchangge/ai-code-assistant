@@ -10,4 +10,5 @@ export interface MarkdownReaderProps {
   fileName: string
   docsPath?: string
   containerHeight?: string
+  reloadInterval?: number
 }

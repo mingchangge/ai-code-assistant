@@ -5,24 +5,33 @@ import { Container, ScrollHost, StyledArticle } from './styles'
 import type { MarkdownReaderProps } from './types'
 import { useMarkdownContent } from './hooks/useMarkdownContent'
 import { useTableOfContents } from './hooks/useTableOfContents'
+import { useFileWatcher } from './hooks/useFileWatcher'
 
 // 优化版MarkdownReader组件
 const MarkdownReader = memo(
   ({
     fileName,
     docsPath = '/docs',
-    containerHeight = 'calc(100vh - 168px)'
+    containerHeight = 'calc(100vh - 168px)',
+    reloadInterval = 3000
   }: MarkdownReaderProps) => {
     const containerRef = useRef<HTMLDivElement>(null)
 
     // 使用自定义hooks
-    const { headings, articleRef, headingsRef } = useMarkdownContent(
-      fileName,
-      docsPath
-    )
+    const { headings, articleRef, headingsRef, reloadContent } =
+      useMarkdownContent(fileName, docsPath)
     const { activeIndex, isTocExpanded, setIsTocExpanded, scrollToHeading } =
       useTableOfContents(headingsRef, containerRef)
-
+    // 使用文件监控hook
+    useFileWatcher(
+      fileName,
+      docsPath,
+      () => {
+        console.log('检测到文件变化，自动重新加载:', fileName)
+        reloadContent()
+      },
+      reloadInterval
+    )
     return (
       <Container style={{ height: containerHeight }}>
         {/* 滚动容器 */}
