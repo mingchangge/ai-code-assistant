@@ -160,6 +160,10 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
     const [isLoading, setIsLoading] = useState(false)
     const [isImporting, setIsImporting] = useState(false)
     const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
+    const [pagination, setPagination] = useState({
+      current: 1,
+      pageSize: 5
+    })
 
     // 当前编辑记录变化时更新表单数据
     useEffect(() => {
@@ -319,6 +323,13 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
     const handleClearSelection = () => {
       setSelectedRowKeys([])
     }
+    const handleTableChange: TableProps<BodyMetricsRecord>['onChange'] =
+      pagination => {
+        setPagination({
+          current: pagination.current ?? 1,
+          pageSize: pagination.pageSize ?? 5
+        })
+      }
     // 使用useImperativeHandle将方法暴露给父组件
     useImperativeHandle(ref, () => ({
       refreshRecords
@@ -475,7 +486,8 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
             rowKey="id"
             rowSelection={rowSelection}
             pagination={{
-              pageSize: 5,
+              current: pagination.current,
+              pageSize: pagination.pageSize,
               showSizeChanger: true,
               pageSizeOptions: ['5', '10', '20'],
               showTotal: total => `共 ${total.toString()} 条记录`
@@ -483,6 +495,7 @@ const HistoryRecords = forwardRef<HistoryRecordsRef, HistoryRecordsProps>(
             scroll={{ x: 'max-content' }} // 横向滚动支持
             loading={isLoading}
             size="middle"
+            onChange={handleTableChange}
           >
             {/* 日期列 */}
             <Column
