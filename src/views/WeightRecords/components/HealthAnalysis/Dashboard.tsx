@@ -268,7 +268,12 @@ export const HealthDashboard = ({
     } catch (e) {
       console.error(e)
       if (isMounted.current) {
-        setAiContent('**分析服务遇到问题，请稍后重试。**')
+        // 🚨 修复 1：明确告知状态机，模型加载又失败了！这样按钮才能变回红色
+        setModelError(true)
+
+        // 🚨 修复 2：将错误提示写入 buffer，防止被 finally 覆盖清空
+        contentBuffer.current =
+          '**模型加载或分析服务遇到问题，请查看控制台报错后重试。**'
       }
     } finally {
       if (isMounted.current) {
