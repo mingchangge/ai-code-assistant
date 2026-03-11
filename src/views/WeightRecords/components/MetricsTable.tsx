@@ -10,32 +10,37 @@ interface MetricsTableProps {
   onSaveEdit: (updatedData: TableItem[]) => void
 }
 
+// 指标名称映射（用于表格显示）
+const labelMap: Record<TableItem['key'], string> = {
+  date: '测量日期',
+  weight: '体重',
+  bmi: 'BMI',
+  bodyFatRate: '体脂率',
+  waterRate: '水分率',
+  skeletalMuscleRate: '骨骼肌率',
+  boneRatio: '骨骼率',
+  proteinRate: '蛋白质率',
+  muscleRate: '肌肉率',
+  visceralFatIndex: '内脏脂肪指数',
+  subcutaneousFat: '皮下脂肪',
+  leanBodyMass: '去脂体重',
+  bodyAge: '身体年龄',
+  bodyType: '体型',
+  basalMetabolism: '基础代谢',
+  activeMetabolism: '活动代谢',
+  targetWeight: '目标体重',
+  weightControl: '体重控制',
+  fatControl: '脂肪控制',
+  muscleControl: '肌肉控制'
+}
+const specialHint = [{ key: 'date', hint: '请填写测量日期(本项不识别)' }]
 const MetricsTable = ({ tableData, onSaveEdit }: MetricsTableProps) => {
   const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState<TableItem[]>([...tableData])
-  // 指标名称映射（用于表格显示）
-  const labelMap: Record<TableItem['key'], string> = {
-    date: '测量日期',
-    weight: '体重',
-    bmi: 'BMI',
-    bodyFatRate: '体脂率',
-    waterRate: '水分率',
-    skeletalMuscleRate: '骨骼肌率',
-    boneRatio: '骨骼率',
-    proteinRate: '蛋白质率',
-    muscleRate: '肌肉率',
-    visceralFatIndex: '内脏脂肪指数',
-    subcutaneousFat: '皮下脂肪',
-    leanBodyMass: '去脂体重',
-    bodyAge: '身体年龄',
-    basalMetabolism: '基础代谢',
-    activeMetabolism: '活动代谢',
-    targetWeight: '目标体重',
-    weightControl: '体重控制',
-    fatControl: '脂肪控制',
-    muscleControl: '肌肉控制',
-    bodyType: '体型'
+  const sortedData = (data: TableItem[]): TableItem[] => {
+    const keys = Object.keys(labelMap) as TableItem['key'][]
+    return [...data].sort((a, b) => keys.indexOf(a.key) - keys.indexOf(b.key))
   }
+  const [editData, setEditData] = useState<TableItem[]>(sortedData(tableData))
 
   // 表格列配置
   const columns: TableColumn[] = [
@@ -54,8 +59,11 @@ const MetricsTable = ({ tableData, onSaveEdit }: MetricsTableProps) => {
       render: (value, record) => {
         // 非编辑状态：显示文本或提示
         if (!isEditing) {
-          return value === undefined || value === '' ? (
-            <Text type="warning">未识别到</Text>
+          return value === undefined || value === '' || value === '未识别到' ? (
+            <Text type="warning">
+              {specialHint.find(item => item.key === record.key)?.hint ??
+                '未识别'}
+            </Text>
           ) : (
             value
           )
@@ -86,7 +94,6 @@ const MetricsTable = ({ tableData, onSaveEdit }: MetricsTableProps) => {
       }
     }
   ]
-
   // 编辑时更新数据
   const handleValueChange = (
     key: TableItem['key'],
@@ -101,7 +108,7 @@ const MetricsTable = ({ tableData, onSaveEdit }: MetricsTableProps) => {
   const toggleEdit = () => {
     if (isEditing) {
       // 取消编辑：恢复原始数据
-      setEditData([...tableData])
+      setEditData(sortedData(tableData))
     }
     setIsEditing(!isEditing)
   }
