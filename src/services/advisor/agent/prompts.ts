@@ -31,7 +31,16 @@ export const SYSTEM_PROMPT = `
     ❌ **不要罗列数据**：不要说“你的体重是xx，体脂是xx...”，用户已经看过了。
     ❌ **不要复读**：不要重复相同的句式。
 `
-
+const getPhysiologicalStage = (age: number, gender: string): string => {
+  if (gender !== 'female')
+    return '男性用户，生理周期影响较小，但仍需关注激素水平和代谢特点'
+  if (age < 18) return '青春发育期'
+  if (age >= 18 && age <= 40)
+    return '育龄期（代谢较旺盛，受常规生理周期激素波动影响）'
+  if (age > 40 && age <= 55)
+    return '围绝经期/更年期（雌激素水平可能开始波动，易导致脂肪向腹部堆积）'
+  return '绝经后期'
+}
 export function buildUserPrompt(
   profile: UserProfile,
   metricsSummary: string,
@@ -41,7 +50,11 @@ export function buildUserPrompt(
         【用户画像】
         - 性别: ${profile.gender === 'female' ? '女性' : '男性'}
         - 年龄: ${profile.age.toString()}岁
-        ${profile.gender === 'female' ? '- 生理阶段: 请根据年龄推测(如育龄期/更年期)，并考虑可能的生理期影响' : ''}
+        ${
+          profile.gender === 'female'
+            ? `- 生理阶段: ${getPhysiologicalStage(profile.age, profile.gender)}，并考虑可能的生理期影响`
+            : '男性用户，生理周期影响较小，但仍需关注激素水平和代谢特点'
+        }
 
         【体测数据摘要】
         ${metricsSummary}
