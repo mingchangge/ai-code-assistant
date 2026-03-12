@@ -1,19 +1,18 @@
-import { memo, useRef } from 'react'
+import { memo, useRef, useEffect } from 'react'
+import type { UpdatePayload } from 'vite'
 import TableOfContents from './TableOfContents'
 import 'github-markdown-css/github-markdown.css'
 import { Container, ScrollHost, StyledArticle } from './styles'
 import type { MarkdownReaderProps } from './types'
 import { useMarkdownContent } from './hooks/useMarkdownContent'
 import { useTableOfContents } from './hooks/useTableOfContents'
-import { useFileWatcher } from './hooks/useFileWatcher'
 
-// 优化版MarkdownReader组件
+// MarkdownReader组件
 const MarkdownReader = memo(
   ({
     fileName,
     docsPath = '/docs',
-    containerHeight = 'calc(100vh - 168px)',
-    reloadInterval = 3000
+    containerHeight = 'calc(100vh - 168px)'
   }: MarkdownReaderProps) => {
     const containerRef = useRef<HTMLDivElement>(null)
 
@@ -22,16 +21,24 @@ const MarkdownReader = memo(
       useMarkdownContent(fileName, docsPath)
     const { activeIndex, isTocExpanded, setIsTocExpanded, scrollToHeading } =
       useTableOfContents(headingsRef, containerRef)
-    // 使用文件监控hook
-    useFileWatcher(
-      fileName,
-      docsPath,
-      () => {
-        console.log('检测到文件变化，自动重新加载:', fileName)
+
+    useEffect(() => {
+      const handleBeforeUpdate = (event: UpdatePayload) => {
+        console.log('热更新前触发', event)
         reloadContent()
-      },
-      reloadInterval
-    )
+      }
+      if (import.meta.hot) {
+        console.log('启用Vite热重载监听')
+
+        // 监听Vite的热重载事件
+        import.meta.hot.on('vite:beforeUpdate', handleBeforeUpdate)
+
+        return () => {
+          // 清理事件监听器
+          import.meta.hot?.off('vite:beforeUpdate', handleBeforeUpdate)
+        }
+      }
+    }, [fileName, docsPath, reloadContent])
     return (
       <Container style={{ height: containerHeight }}>
         {/* 滚动容器 */}
