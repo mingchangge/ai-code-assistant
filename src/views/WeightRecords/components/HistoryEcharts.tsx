@@ -14,7 +14,9 @@ const options: { label: string; value: string }[] = [
   { label: '肌肉量', value: 'muscleRate' },
   { label: '骨骼肌率', value: 'skeletalMuscleRate' },
   { label: '骨骼率', value: 'boneRatio' },
-  { label: '蛋白质率', value: 'proteinRate' }
+  { label: '蛋白质率', value: 'proteinRate' },
+  { label: '基础代谢', value: 'basalMetabolism' },
+  { label: '活动代谢', value: 'activeMetabolism' }
 ]
 function HistoryEcharts({ records }: { records: BodyMetricsRecord[] }) {
   const [selected, setSelected] = useState('weight')
@@ -35,14 +37,17 @@ function HistoryEcharts({ records }: { records: BodyMetricsRecord[] }) {
 
   useEffect(() => {
     const sortedRecords = [...records]
-      .filter(item => item.date && item[selected] !== undefined)
+      .filter(
+        item =>
+          item.date && item[selected as keyof BodyMetricsRecord] !== undefined
+      )
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
     if (sortedRecords.length === 0) return
 
     const data = sortedRecords
-      .filter(item => item[selected])
-      .map(item => item[selected])
+      .filter(item => item[selected as keyof BodyMetricsRecord])
+      .map(item => item[selected as keyof BodyMetricsRecord])
     const dates = sortedRecords.filter(item => item.date).map(item => item.date)
 
     // 设置图表数据和x轴数据
@@ -56,7 +61,12 @@ function HistoryEcharts({ records }: { records: BodyMetricsRecord[] }) {
       max:
         selected === 'weight' ? Math.ceil(maxValue) : Math.ceil(maxValue) + 2.0,
       interval: 2.0,
-      unit: selected === 'weight' ? 'kg' : '%'
+      unit:
+        selected === 'weight'
+          ? 'kg'
+          : selected.includes('Metabolism')
+            ? 'kcal'
+            : '%'
     })
   }, [records, selected])
 
