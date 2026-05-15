@@ -62,6 +62,13 @@ export const METRIC_KEY_MAP: Record<string, keyof BodyMetrics | undefined> = {
   肌肉控制: 'muscleControl',
   体型: 'bodyType'
 }
+// 反向映射表：数据结构 Key -> 中文 Key
+export const METRIC_KEY_MAP_REVERSE: Record<
+  keyof BodyMetrics,
+  string | undefined
+> = Object.fromEntries(
+  Object.entries(METRIC_KEY_MAP).map(([k, v]) => [v, k])
+) as Record<keyof BodyMetrics, string | undefined>
 // 初始空数据结构
 export const INITIAL_METRICS: BodyMetrics = {
   date: '',

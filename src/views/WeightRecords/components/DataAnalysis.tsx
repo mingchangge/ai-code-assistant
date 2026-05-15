@@ -20,6 +20,7 @@ import MarkdownIt from 'markdown-it'
 import WorkerConstructor from '@/workers/opfs-cache.worker?worker'
 import { registerSW } from '@/utils/register-sw'
 import type { BodyMetricsRecord } from './types' // 你的类型定义文件
+import { METRIC_KEY_MAP_REVERSE } from '@/services/ocr/weight-domain/constants.ts'
 
 const { Title, Text } = Typography
 
@@ -79,7 +80,7 @@ export default function DataAnalysis({
             setStatus({
               type: 'loading',
               message: '缓存中...',
-              progress: data.percent!
+              progress: data.percent ?? 0
             })
           if (data.type === 'done') resolve()
         }
@@ -93,9 +94,7 @@ export default function DataAnalysis({
     try {
       await registerSW()
       const tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID)
-      console.log('tokenizer', tokenizer)
       try {
-        console.log('MODEL_ID', MODEL_ID)
         const pipe = await pipeline('text-generation', MODEL_ID, {
           device: 'webgpu',
           tokenizer
@@ -104,14 +103,12 @@ export default function DataAnalysis({
         pipelineRef.current = pipe
         setStatus({ type: 'idle', message: '模型加载完毕，可以开始分析了。' })
       } catch (error) {
-        console.log('2222222222222222222', error)
         const msg = error instanceof Error ? error.message : String(error)
         setStatus({ type: 'error', message: `模型加载失败pipeline: ${msg}` })
         message.error(`模型加载失败pipeline: ${msg}`)
       }
       // const tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID)
     } catch (e) {
-      console.log('1111111111111111111', e)
       const msg = e instanceof Error ? e.message : String(e)
       setStatus({ type: 'error', message: `模型加载失败tokenizer: ${msg}` })
       message.error(`模型加载失败tokenizer: ${msg}`)
@@ -156,9 +153,10 @@ export default function DataAnalysis({
         do_sample: true
       })
 
-      const text =
-        result[0]?.generated_text.split('<|assistant|>').pop()?.trim() ??
-        '未能生成有效分析，请稍后重试。'
+      const text: string =
+        (result[0]?.generated_text.split('<|assistant|>').pop()?.trim() as
+          | string
+          | undefined) ?? ('未能生成有效分析，请稍后重试。' as string)
 
       setAnalysisResult(text)
       setStatus({ type: 'done', message: '分析完成！' })
@@ -249,7 +247,14 @@ export default function DataAnalysis({
                   style={{ width: '100%' }}
                 >
                   {Object.entries(item).map(([k, v]) => (
-                    <Descriptions.Item key={k} label={k}>
+                    <Descriptions.Item
+                      key={k}
+                      label={
+                        k === 'date'
+                          ? '测量日期'
+                          : ((METRIC_KEY_MAP_REVERSE[k] ?? k) as string)
+                      }
+                    >
                       {String(v)}
                     </Descriptions.Item>
                   ))}
