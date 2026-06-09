@@ -40,7 +40,7 @@ const SideMenu = () => {
     {
       key: 'software-engineer-exam',
       icon: <RadarChartOutlined />,
-      label: '软考中级',
+      label: '计算机基础',
       path: '/software-engineer-exam'
     },
     {
